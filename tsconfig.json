@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022"],
+		"types": ["./worker-configuration.d.ts"],
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"isolatedModules": true,
+		// o2h's worker core, as declared for the Workers runtime (see src/types/o2h-worker-core.d.ts)
+		"paths": {
+			"o2h/worker/core.js": ["./src/types/o2h-worker-core.d.ts"]
+		}
+	},
+	"include": ["src/**/*.ts"]
+}

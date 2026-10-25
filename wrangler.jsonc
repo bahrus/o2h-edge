@@ -1,0 +1,39 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "o2h-edge",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+
+	// Records ({ config, options } from o2h's prepareO2HRecord), keyed by the hash of their content.
+	// No id: wrangler creates the namespace on the first deploy (and `wrangler dev` uses a local one).
+	"kv_namespaces": [{ "binding": "RECORDS" }],
+
+	// Per-IP limit for every caller (workers.dev included, where dashboard WAF rules don't apply)
+	"ratelimits": [{ "name": "LIMITER", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }],
+
+	"vars": {
+		// The sandbox: on the default *.workers.dev host (and localhost in development), any API origin passes.
+		// "off" closes it: then only hosts listed in DOMAIN_ALLOWLIST work.
+		"SANDBOX": "on",
+		// Production hosts → the API origins they may call, e.g. { "apis.example.com": ["https://api.nasa.gov"] }
+		"DOMAIN_ALLOWLIST": {},
+		// Guards on upstream calls
+		"MAX_RESPONSE_BYTES": 5000000,
+		"UPSTREAM_TIMEOUT_MS": 10000,
+		"MAX_RECORD_BYTES": 262144,
+		// Tests only (wrangler dev --var ALLOW_LOCAL_UPSTREAM:on): lets localhost APIs through, from localhost
+		"ALLOW_LOCAL_UPSTREAM": "off"
+	},
+
+	// Workspace development: o2h's own node_modules may hold an older assign-gingerly, so each module o2h imports
+	// is bundled from the sibling repo (node_modules/assign-gingerly links to it). Wrangler aliases match whole
+	// specifiers, not subpaths, hence one entry each. Remove once o2h-edge depends on published versions.
+	"alias": {
+		"assign-gingerly/assignFrom.js": "./node_modules/assign-gingerly/assignFrom.js",
+		"assign-gingerly/handlers/compileTree.js": "./node_modules/assign-gingerly/handlers/compileTree.js",
+		"assign-gingerly/handlers/treeSpec.js": "./node_modules/assign-gingerly/handlers/treeSpec.js",
+		"assign-gingerly/pipes/dataPipes.js": "./node_modules/assign-gingerly/pipes/dataPipes.js",
+		"assign-gingerly/resolve/getValues.js": "./node_modules/assign-gingerly/resolve/getValues.js",
+		"assign-gingerly/syncOps/microJoin.js": "./node_modules/assign-gingerly/syncOps/microJoin.js"
+	}
+}
