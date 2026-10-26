@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>o2h-edge transforms</title>
+    <!-- #include virtual="/imports.html" -->
+    <style>
+        :root {
+            --bg: #0b1020; --panel: #141b31; --line: #273152; --text: #e7eaf3; --muted: #9aa5c4;
+            --accent: #7cc4ff; --badge: #2a3a66; --warn: #ffcf70;
+            --j-key: #7cc4ff; --j-string: #a5e3a0; --j-number: #ffcf70; --j-literal: #f0a0d0;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f4f6fb; --panel: #ffffff; --line: #d9deea; --text: #1b2033; --muted: #5c6684; --accent: #1f6fd1; --badge: #e3ebfb; --warn: #8a5a00;
+                --j-key: #1f5fb8; --j-string: #2a7a2a; --j-number: #9a5b00; --j-literal: #a3317a;
+            }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        header, main, footer { max-width: 1000px; margin: 0 auto; padding: 16px; }
+        h1 { margin: 8px 0 4px; font-size: 1.6rem; }
+        header p, footer { color: var(--muted); }
+        header p { margin: 0; }
+        form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+        label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+        input, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+        input { width: 16em; max-width: 100%; }
+        button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
+        button.secondary { background: var(--badge); color: var(--text); }
+        button:disabled { opacity: .5; cursor: default; }
+        #status { font-size: .85rem; color: var(--muted); min-height: 1.5em; }
+        #status .warn { color: var(--warn); }
+        #results { display: grid; gap: 8px; }
+        .page { display: contents; }
+        .transform { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+        .transform > summary { cursor: pointer; padding: 10px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; }
+        .transform > summary code { font-size: .85rem; }
+        .fields { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+        .meta { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+        .meta span:not(:empty) ~ span:not(:empty)::before { content: ' · '; }
+        .json { border-top: 1px solid var(--line); padding: 10px 14px 14px; }
+        .tools { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: .85rem; color: var(--muted); }
+        pre { margin: 0; max-height: 60vh; overflow: auto; font-size: .8rem; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+        .k { color: var(--j-key); } .s { color: var(--j-string); } .n { color: var(--j-number); } .l { color: var(--j-literal); }
+        #more { margin-top: 12px; }
+        footer { font-size: .8rem; }
+        @media (max-width: 600px) {
+            .transform > summary { grid-template-columns: 1fr; }
+            .fields { white-space: normal; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Transforms</h1>
+        <p>Every transform stored in an <strong>o2h-edge</strong> worker. Open one to see its JSON.</p>
+    </header>
+    <main>
+        <form id="query">
+            <label>Worker <input type="url" name="worker" value="http://localhost:8787"></label>
+            <label>Admin token <input type="password" name="token" autocomplete="off" placeholder="not needed on localhost"></label>
+            <button type="submit">List</button>
+        </form>
+        <p id="status"></p>
+        <section id="results" aria-live="polite"></section>
+        <button type="button" class="secondary" id="more" hidden>More</button>
+    </main>
+    <footer>
+        <p>The list comes from <code>GET /transforms</code>, which needs the admin token (the worker's <code>LIST_TOKEN</code> secret)
+            everywhere but localhost. The token is kept for this tab only (<code>sessionStorage</code>). Each transform's JSON comes from
+            <code>GET /transforms/&lt;key&gt;</code>, when it's opened. <strong>Copy raw</strong> copies it exactly as stored: the JSON its
+            key is the hash of, so storing the copy elsewhere gives the same key. The summary lists the data fields a transform reads.</p>
+    </footer>
+
+    <script type="module">
+        import { tree } from 'assign-gingerly/DX/tree.js';
+        import { assignFromAsync } from 'assign-gingerly/index.js';
+
+        const form = document.getElementById('query');
+        const results = document.getElementById('results');
+        const status = document.getElementById('status');
+        const more = document.getElementById('more');
+        const say = html => { status.innerHTML = html; };
+        const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+        // The token lives only as long as this tab
+        try { form.token.value = sessionStorage.getItem('o2h-edge-token') ?? ''; } catch {}
+
+        // One entry per transform (the list is an array, so '*' renders each item); its JSON is fetched when opened
+        const entry = tree`
+            <details class="transform" data-key=${'?.key'}>
+                <summary>
+                    <code>${'?.key'}</code>
+                    <span class="fields">${'?.summary'}</span>
+                    <span class="meta"><span>${'?.size'}</span><span>${'?.stored'}</span></span>
+                </summary>
+                <div class="json">
+                    <div class="tools"><button type="button" class="secondary copy">Copy raw</button><span class="copied" aria-live="polite"></span></div>
+                    <pre>Loading…</pre>
+                </div>
+            </details>`;
+        const config = { map: { '*': entry } };
+
+        // Formatted here, so transforms stored before there was metadata show blanks
+        const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        const toView = t => ({
+            key: t.key,
+            summary: t.summary ?? '',
+            size: t.bytes === undefined ? '' : t.bytes < 1024 ? `${t.bytes} B` : `${(t.bytes / 1024).toFixed(1)} KB`,
+            stored: t.stored ? dateFormat.format(new Date(t.stored)) : '',
+        });
+
+        // Pretty JSON, colored: keys, strings, numbers, and true / false / null
+        const highlight = json => escape(json).replace(
+            /("(?:\\.|[^"\\])*")(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+            (match, string, colon) => string
+                ? `<span class="${colon ? 'k' : 's'}">${string}</span>${colon ?? ''}`
+                : `<span class="${/\d/.test(match) ? 'n' : 'l'}">${match}</span>`);
+
+        let worker = '';
+        let token = '';
+        let cursor = null;
+        let count = 0;
+        const raw = new Map(); // key → the JSON as stored
+
+        async function list(next) {
+            for (const button of document.querySelectorAll('button')) button.disabled = true;
+            say('Loading…');
+            try {
+                const response = await fetch(`${worker}/transforms${next ? `?cursor=${encodeURIComponent(next)}` : ''}`,
+                    { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!response.ok) {
+                    const { error } = await response.json().catch(() => ({ error: response.statusText }));
+                    say(`<span class="warn">${response.status}: ${escape(error)}</span>`);
+                    more.hidden = true;
+                    return;
+                }
+                const page = await response.json();
+                // Each page in its own container, so opened entries stay open as more arrive
+                const container = document.createElement('div');
+                container.className = 'page';
+                results.append(container);
+                await assignFromAsync(container, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: page.transforms.map(toView) });
+                count += page.transforms.length;
+                cursor = page.cursor;
+                more.hidden = !cursor;
+                say(count === 0 ? 'No transforms stored yet.' : `${count} transform${count === 1 ? '' : 's'}${cursor ? ', and more' : ''}.`);
+            } catch (e) {
+                say(`<span class="warn">${escape(e.message)}. Is the worker running (<code>npm run dev</code>)?</span>`);
+            } finally {
+                for (const button of document.querySelectorAll('button')) button.disabled = false;
+                document.body.dataset.ready = 'true';
+            }
+        }
+
+        // Opening an entry fetches its JSON, once ('toggle' doesn't bubble, so it's caught on the way down)
+        results.addEventListener('toggle', async event => {
+            const details = event.target;
+            const key = details.dataset.key;
+            if (!details.open || raw.has(key)) return;
+            const pre = details.querySelector('pre');
+            try {
+                const response = await fetch(`${worker}/transforms/${key}`);
+                if (!response.ok) throw new Error(`${response.status}: ${(await response.json().catch(() => ({}))).error ?? response.statusText}`);
+                const json = await response.text();
+                raw.set(key, json);
+                pre.innerHTML = highlight(JSON.stringify(JSON.parse(json), null, 2));
+            } catch (e) {
+                pre.textContent = e.message;
+            }
+        }, true);
+
+        results.addEventListener('click', async event => {
+            const button = event.target.closest('button.copy');
+            if (!button) return;
+            const details = button.closest('details');
+            const copied = details.querySelector('.copied');
+            const json = raw.get(details.dataset.key);
+            if (json === undefined) return;
+            try {
+                await navigator.clipboard.writeText(json);
+                copied.textContent = `Copied (${json.length} characters)`;
+            } catch (e) {
+                copied.textContent = `Couldn't copy: ${e.message}`;
+            }
+            setTimeout(() => { copied.textContent = ''; }, 2000);
+        });
+
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            worker = form.worker.value.replace(/\/+$/, '');
+            token = form.token.value.trim();
+            try { sessionStorage.setItem('o2h-edge-token', token); } catch {}
+            results.replaceChildren();
+            raw.clear();
+            count = 0;
+            list();
+        });
+        more.addEventListener('click', () => list(cursor));
+        form.requestSubmit();
+    </script>
+</body>
+</html>

@@ -46,6 +46,7 @@ before(async () => {
     edge = spawn(process.execPath, [
         'node_modules/wrangler/bin/wrangler.js', 'dev', '--port', String(EDGE_PORT), '--ip', '127.0.0.1',
         '--var', 'ALLOW_LOCAL_UPSTREAM:on', '--var', 'MAX_RESPONSE_BYTES:1000', '--var', 'UPSTREAM_TIMEOUT_MS:500',
+        '--var', 'LIST_TOKEN:test-token',
         '--persist-to', STATE,
     ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } });
     let log = '';
@@ -82,7 +83,49 @@ test('transforms: stored under the hash of their content, and only there', async
     assert.equal(wrong.status, 400);
     assert.match((await wrong.json()).error, /doesn't match/);
     assert.equal((await store(transform, 'not-a-key')).status, 400);
-    assert.equal((await fetch(`${EDGE}/transforms/${key}`)).status, 405);
+});
+
+test('transforms: read back exactly as stored, and cacheable for good', async () => {
+    const { key, transform } = await prepareO2HTransform(config, {});
+    await store(transform, key);
+    const res = await fetch(`${EDGE}/transforms/${key}`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('Cache-Control'), /immutable/);
+    assert.equal(await res.text(), JSON.stringify(transform), 'the JSON its key is the hash of');
+    assert.equal((await fetch(`${EDGE}/transforms/o2h-00000000000000000000000000000000`)).status, 404);
+    assert.equal((await fetch(`${EDGE}/transforms/${key}`, { method: 'DELETE' })).status, 405);
+});
+
+test('transforms: listed, with size, date and summary (on localhost, no token needed)', async () => {
+    const { key, transform } = await prepareO2HTransform(config, {});
+    await store(transform, key);
+    const res = await fetch(`${EDGE}/transforms`);
+    assert.equal(res.status, 200);
+    const { transforms, cursor } = await res.json();
+    assert.equal(cursor, null);
+    const listed = transforms.find(t => t.key === key);
+    assert.equal(listed.summary, 'name, rocket, note, type');
+    assert.equal(listed.bytes, JSON.stringify(transform).length);
+    assert.ok(Date.now() - Date.parse(listed.stored) < 120_000, listed.stored);
+});
+
+// As a deployed host would see it: the Host header names a workers.dev host
+const listAs = (headers = {}) => new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: EDGE_PORT, path: '/transforms', headers: { Host: 'o2h-edge.someone.workers.dev', ...headers } }, res => {
+        let body = '';
+        res.on('data', d => { body += d; });
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+    }).on('error', reject);
+});
+
+test('transforms: elsewhere, listing needs the admin token', async () => {
+    const none = await listAs();
+    assert.equal(none.status, 401, none.body);
+    assert.match(JSON.parse(none.body).error, /admin token/);
+    assert.equal((await listAs({ Authorization: 'Bearer wrong' })).status, 401);
+    const allowed = await listAs({ Authorization: 'Bearer test-token' });
+    assert.equal(allowed.status, 200, allowed.body);
+    assert.ok(Array.isArray(JSON.parse(allowed.body).transforms));
 });
 
 test('render: the API\'s JSON as HTML, with the JSON embedded, and CORS', async () => {
@@ -148,6 +191,7 @@ test('guards: bad requests', async () => {
     const preflight = await fetch(`${EDGE}/transforms/x`, { method: 'OPTIONS' });
     assert.equal(preflight.status, 204);
     assert.match(preflight.headers.get('Access-Control-Allow-Methods'), /PUT/);
+    assert.match(preflight.headers.get('Access-Control-Allow-Headers'), /Authorization/);
 });
 
 test('guards: the per-IP rate limit (60 a minute)', async () => {

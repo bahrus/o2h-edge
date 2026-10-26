@@ -4,7 +4,9 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-01",
 	// Transforms ({ config, options } from o2h's prepareO2HTransform), keyed by the hash of their content.
-	// No id: wrangler creates the namespace on the first deploy (and `wrangler dev` uses a local one).
+	// The id is this repo's deployed namespace (wrangler created it on the first deploy and wrote it here). A copy
+	// deployed to another Cloudflare account removes the id, and gets its own the same way. `wrangler dev` uses a
+	// local namespace either way.
 	"kv_namespaces": [
 		{
 			"binding": "TRANSFORMS",

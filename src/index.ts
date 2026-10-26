@@ -3,6 +3,8 @@
  *
  *   PUT /transforms/<key>                   store a transform (o2h's prepareO2HTransform: { config, options }),
  *                                           keyed by the hash of its content
+ *   GET /transforms/<key>                   a transform, exactly as stored
+ *   GET /transforms[?cursor=…]              list them (key, size, date, summary): the admin token, or localhost
  *   GET /render?api=<url>&transform=<key>   call the API, and render its JSON with that transform:
  *                                           HTML, with the JSON embedded after it, for the page to hydrate
  *
@@ -13,13 +15,13 @@
  */
 
 import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
-import { errorResponse, guardedFetch, refuseApiUrl } from './guards.js';
-import { getTransform, putTransform } from './transforms.js';
+import { errorResponse, guardedFetch, refuseApiUrl, refuseListing } from './guards.js';
+import { getTransform, getTransformJson, listTransforms, putTransform } from './transforms.js';
 
 const CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Expose-Headers': 'X-O2H-Error',
 };
 
@@ -29,14 +31,33 @@ export default {
         if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
         const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
-        if (url.pathname === '/render' || url.pathname.startsWith('/transforms/')) {
+        if (url.pathname === '/render' || url.pathname === '/transforms' || url.pathname.startsWith('/transforms/')) {
             const { success } = await env.LIMITER.limit({ key: ip });
             if (!success) return errorResponse(429, 'too many requests: try again in a minute');
         }
 
+        if (url.pathname === '/transforms') {
+            if (request.method !== 'GET') return errorResponse(405, 'list transforms with GET');
+            const refused = await refuseListing(request, env);
+            if (refused) return errorResponse(refused.status, refused.error);
+            const list = await listTransforms(env, url.searchParams.get('cursor') ?? undefined);
+            return new Response(JSON.stringify(list), {
+                headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS },
+            });
+        }
+
         if (url.pathname.startsWith('/transforms/')) {
-            if (request.method !== 'PUT') return errorResponse(405, 'transforms are stored with PUT');
-            const refused = await putTransform(env, url.pathname.slice('/transforms/'.length), await request.text());
+            const key = url.pathname.slice('/transforms/'.length);
+            if (request.method === 'GET') {
+                const json = await getTransformJson(env, key);
+                if (json === undefined) return errorResponse(404, `no transform for "${key}"`);
+                // A key names one content forever, so it may be cached for good
+                return new Response(json, {
+                    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable', ...CORS },
+                });
+            }
+            if (request.method !== 'PUT') return errorResponse(405, 'transforms are read with GET, and stored with PUT');
+            const refused = await putTransform(env, key, await request.text());
             return refused ? errorResponse(400, refused) : new Response(null, { status: 204, headers: CORS });
         }
 
@@ -60,7 +81,7 @@ export default {
         }
 
         if (url.pathname === '/') {
-            return new Response('o2h-edge: PUT /transforms/<key>, GET /render?api=<url>&transform=<key>\n', {
+            return new Response('o2h-edge: PUT /transforms/<key>, GET /transforms/<key>, GET /transforms (admin), GET /render?api=<url>&transform=<key>\n', {
                 headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS },
             });
         }

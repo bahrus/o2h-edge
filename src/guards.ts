@@ -110,3 +110,21 @@ async function readCapped(response: Response, maxBytes: number): Promise<Uint8Ar
     }
     return body;
 }
+
+/**
+ * Who may list transforms: anyone on localhost (development), otherwise only callers with the admin token
+ * (`Authorization: Bearer <LIST_TOKEN>`). Unset, listing is off. A refusal (status and reason), or undefined.
+ */
+export async function refuseListing(request: Request, env: Env): Promise<{ status: number; error: string } | undefined> {
+    if (isLocalHost(new URL(request.url).hostname)) return undefined;
+    if (!env.LIST_TOKEN) return { status: 403, error: 'listing is off (the LIST_TOKEN secret is not set)' };
+    const given = /^Bearer (.+)$/.exec(request.headers.get('Authorization') ?? '')?.[1];
+    if (!given || !(await sameSecret(given, env.LIST_TOKEN))) return { status: 401, error: 'listing needs the admin token (Authorization: Bearer <token>)' };
+    return undefined;
+}
+
+/** Compared in constant time, as hashes (timingSafeEqual needs equal lengths). */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+    const [x, y] = await Promise.all([a, b].map(s => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))));
+    return crypto.subtle.timingSafeEqual(x, y);
+}

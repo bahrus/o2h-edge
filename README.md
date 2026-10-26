@@ -15,6 +15,8 @@ A page stores a **transform** (the config and options it would use with [builtIn
 | Request | Does |
 |---|---|
 | `PUT /transforms/<key>` | Stores a transform (JSON) in KV, under the **hash of its content**, as o2h's `prepareO2HTransform` computes it. A key that doesn't match its content is refused, so anyone may store a transform, but nobody can change one. |
+| `GET /transforms/<key>` | The transform, exactly as stored: the JSON its key is the hash of. Cacheable for good (`immutable`), since a key always names the same content. |
+| `GET /transforms[?cursor=…]` | Lists the stored transforms: `{ transforms: [{ key, bytes, stored, summary }], cursor }`, up to 1000 a page (`cursor` asks for the next; `null` when there's none). `summary` names the data fields a transform reads. Transforms stored before the list existed have only a `key`. **Needs the admin token** (below), except on localhost. |
 | `GET /render?api=<url>&transform=<key>` | Calls the API (through the guards below), and renders its JSON with the transform. The result is `text/html`, with the JSON in `<script type="application/json" data-tree="tree">`. With no transform for the key, or a rendering error, the API's JSON comes back as is, with an `X-O2H-Error` header saying why. |
 | `GET /` | A one-line description |
 
@@ -43,9 +45,10 @@ A public worker that calls any URL would be a proxy anyone could abuse, so it le
 - **Targets:** `https` only, and named public hosts only (no IP literals, no localhost).
 - **Upstream calls:** `GET` only. Only an `Accept: application/json` header is sent: the caller's cookies, authorization and other headers aren't forwarded.
 - **Responses:** **JSON only**; anything else is refused (`415`), not passed through. They're capped at `MAX_RESPONSE_BYTES` (`413`), with a timeout of `UPSTREAM_TIMEOUT_MS` (`504`). Transforms are capped at `MAX_TRANSFORM_BYTES`.
+- **Listing:** only with the admin token, `Authorization: Bearer <token>`, which must match the `LIST_TOKEN` secret (`npx wrangler secret put LIST_TOKEN`). Without the secret, listing is off (`403`). On localhost (`npm run dev`), no token is needed. Reading one transform by its key stays public, since anyone with the key can render with it anyway.
 - **Rate:** 60 requests a minute per IP (the `LIMITER` rate-limit binding; it works on `workers.dev`, where dashboard WAF rules don't apply).
 
-All of these are `vars` in `wrangler.jsonc`.
+All of these but `LIST_TOKEN` (a secret) are `vars` in `wrangler.jsonc`.
 
 ## Demo: NASA's Astronomy Picture of the Day
 
@@ -59,6 +62,10 @@ The page stores its transform (a tree config and pipes), then asks the worker to
 
 **Served from the beGingerly workspace instead** (its `npm run serve`), the page is at `/o2h-edge/demo/apod.html`, and the workspace's `imports.html` maps `o2h/` and `assign-gingerly/` to the sibling repos.
 
+## Demo: the stored transforms
+
+[`demo/transforms.html`](demo/transforms.html) lists the transforms a worker holds: key, the data fields each reads, size and date. Open one to see its JSON, indented and colored. **Copy raw** copies it exactly as stored, so storing the copy elsewhere gives the same key. Serve it like the APOD demo. For a deployed worker, enter its URL and the admin token, which the page keeps for that tab only (`sessionStorage`).
+
 ## Developing
 
 - **`npm run dev`:** `wrangler dev`, the worker on your machine, in Cloudflare's runtime, with local KV.
@@ -69,5 +76,7 @@ The page stores its transform (a tree config and pipes), then asks the worker to
 ## Deploying
 
 1. `npx wrangler login` (once).
-2. `npm run deploy`. The first deploy creates the KV namespace (the config has no id on purpose). The worker is then at `o2h-edge.<your-subdomain>.workers.dev`: the sandbox.
+2. `npm run deploy`. The worker is then at `o2h-edge.<your-subdomain>.workers.dev`: the sandbox.
+   - **The KV namespace:** `wrangler.jsonc` holds the id of this repo's deployed one. **Deploying to your own account?** Remove the `id` first: the deploy then creates a namespace for you and writes its id back.
+   - **To list transforms there,** set the admin token: `npx wrangler secret put LIST_TOKEN`.
 3. **Optionally:** connect the GitHub repo to **Workers Builds** in the Cloudflare dashboard, so a push deploys. Custom domains are added there too, along with their `DOMAIN_ALLOWLIST` entries.
