@@ -87,7 +87,10 @@
 
         const API = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic';
 
-        // Pipes: data pipes run in the worker; function pipes only here (the worker leaves what needs them pending)
+        // Pipes. dataPipes() turns descriptors into pipes, and passes plain functions through, so all of them live in one
+        // object (excerpt's chain needs plainText and shorten in the same call, to find them by name).
+        // In the worker: longDate and kind run. plainText and shorten are functions, so only this page runs them. excerpt
+        // is a descriptor and reaches the worker, but its first link is plainText, so what uses it is left pending too.
         const pipes = dataPipes({
             longDate: { intl: 'DateTimeFormat', locale: 'en-US', options: { dateStyle: 'long', timeZone: 'UTC' } },
             kind: { map: { image: 'Image', video: 'Video' }, default: 'Other' },
@@ -146,6 +149,8 @@
                 const type = response.headers.get('Content-Type') ?? '';
                 if (type.startsWith('text/html')) {
                     // Rendered by the worker: assign it, then hydrate with the real pipes (finishing the pending parts)
+                    // This could alternatively use the streaming API's, especially when browsers 
+                    // support them (non beta).
                     results.innerHTML = await response.text();
                     const pending = results.querySelectorAll('[data-pending]').length;
                     const embedded = JSON.parse(results.querySelector('script[type="application/json"][data-tree="tree"]').textContent);

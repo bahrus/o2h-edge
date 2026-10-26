@@ -52,3 +52,63 @@ The worker answered in about 50–130 ms once warm (the first call took ~1.4 s, 
 1. `npm run dev`: the worker.
 2. `npm run serve`, in a second terminal.
 3. Open `http://localhost:8000/demo/apod.html`, or whichever port spa-ssi reports.
+
+
+## Bruce's Response I
+
+The demo works great!
+
+I have a question about this:
+
+```JS
+    // Pipes: data pipes run in the worker; function pipes only here (the worker leaves what needs them pending)
+    const pipes = dataPipes({
+        longDate: { intl: 'DateTimeFormat', locale: 'en-US', options: { dateStyle: 'long', timeZone: 'UTC' } },
+        kind: { map: { image: 'Image', video: 'Video' }, default: 'Other' },
+        // HTML (as the API sends explanations and credits) → plain text, parsed inertly (a template runs nothing, loads nothing)
+        plainText: html => {
+            const template = document.createElement('template');
+            template.innerHTML = html;
+            return template.content.textContent.replace(/^\s*Explanation:\s*/, '').trim();
+        },
+        shorten: text => (text.length > 320 ? `${text.slice(0, 317).trimEnd()}…` : text),
+        excerpt: { chain: ['plainText', 'shorten'] },
+    });
+```
+
+I kind of vaguely understand that the first two, longDate, and kind, really are "data based", and as such get executed by the cloudflare worker while generating the html.  What surprises me is the plainText/shorten/excerpt. plainText and shorten don't seem data based, so I want to confirm my understanding that those two only get applied in the browser main page, correct?  You just kept them in the dataPipes, because dataPipes supports functions (a surprise to me), it just gracefully ignores them when it gets passed into JSON?  If I'm wrong, I need to dig into this further.
+
+
+## Claude's Answer I
+
+**Yes, your understanding is right:** `plainText` and `shorten` only ever run in the browser. Two nuances: how they're "ignored", and `excerpt`.
+
+### Why they're inside `dataPipes(...)`
+
+**`dataPipes` passes plain functions through unchanged,** by design (we agreed on it in [PipesAsData.md](../../assign-gingerly/Chats/AssignFrom/TODO/PipesAsData.md), "Should `chain` reach plain function pipes too?"). There are two reasons:
+- **One object for all pipes:** it's what the page passes as `pipes`, for both hydration and `prepareO2HRecord`.
+- **Chains find their links by name, in the same call:** `excerpt` is `{ chain: ['plainText', 'shorten'] }`, and `dataPipes` checks those names when it's called, so the functions have to be in the same object.
+
+So the functions are there for the page's sake and for the chain, not because they become data.
+
+### How they're "ignored" on the way to the worker
+
+**They aren't silently dropped,** which is what `JSON.stringify` would do with a function. Silent dropping would be worse: the worker wouldn't know a `plainText` pipe existed. It would treat `?.explanation?.excerpt` as plain property names and render an **empty** `<p>`, unmarked, which `adopt: 'pending'` would then leave empty.
+
+**What actually happens:** `prepareO2HRecord` replaces each function with a **stand-in** (`{ $o2hLost: 'pipe', name: 'plainText' }`), and lists it in `lost`. That's why the status line names `plainText` and `shorten`. In the worker, each stand-in becomes a stub that throws `LostReference` when called. o2h catches that, leaves the key unrendered, and **marks the element `data-pending`**, so the page knows to finish it.
+
+### The nuance: `excerpt`
+
+**`excerpt` is a data pipe** (a `chain` descriptor), so unlike the two functions, it *is* stored and *does* reach the worker. But when the worker runs it, its first link is `plainText`, which is a stub there. So it throws, and the `<p class="explanation">` is left pending too. The same goes for `?.credit?.plainText` directly.
+
+| Pipe | Kind | Stored in the record | Runs in the worker | Result |
+|---|---|---|---|---|
+| `longDate` | data (`intl`) | its descriptor | ✅ | the date is rendered by the worker |
+| `kind` | data (`map`) | its descriptor | ✅ | the badge is rendered by the worker |
+| `plainText` | function | a stand-in | ❌ (a throwing stub) | the credit is left pending |
+| `shorten` | function | a stand-in | ❌ | (only used through `excerpt`) |
+| `excerpt` | data (`chain`) | its descriptor | starts, then hits `plainText` | the explanation is left pending |
+
+**If `plainText` could be expressed as data** (it can't today; it needs an HTML parser), `excerpt` would run in the worker too, without any change to `excerpt`. That's the point of chains reaching function pipes: when a link later becomes data, everything chained through it starts rendering in the worker on its own.
+
+I've reworded the comment above the pipes in `demo/apod.html` to say this.
