@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { prepareO2HRecord } from 'o2h/worker/client.js';
 
@@ -56,7 +56,11 @@ before(async () => {
 });
 
 after(async () => {
-    edge?.kill();
+    // The whole tree: wrangler starts workerd processes, which outlive it on Windows if only wrangler is killed
+    if (edge?.pid) {
+        if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(edge.pid), '/T', '/F'], { stdio: 'ignore' });
+        else edge.kill();
+    }
     await new Promise(r => api.close(r));
 });
 

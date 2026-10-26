@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>APOD via o2h-edge</title>
+    <!-- #include virtual="/imports.html" -->
+    <style>
+        :root {
+            --bg: #0b1020; --panel: #141b31; --line: #273152; --text: #e7eaf3; --muted: #9aa5c4;
+            --accent: #7cc4ff; --badge: #2a3a66; --warn: #ffcf70;
+        }
+        @media (prefers-color-scheme: light) {
+            :root { --bg: #f4f6fb; --panel: #ffffff; --line: #d9deea; --text: #1b2033; --muted: #5c6684; --accent: #1f6fd1; --badge: #e3ebfb; --warn: #8a5a00; }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+        header, main, footer { max-width: 1200px; margin: 0 auto; padding: 16px; }
+        h1 { margin: 8px 0 4px; font-size: 1.6rem; }
+        header p { margin: 0; color: var(--muted); }
+        form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+        label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+        input, select, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+        input[type=number] { width: 6em; }
+        input[type=url] { width: 16em; max-width: 100%; }
+        button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
+        button.secondary { background: var(--badge); color: var(--text); }
+        button:disabled { opacity: .5; cursor: default; }
+        .note { color: var(--muted); font-size: .85rem; margin: 0 0 8px; }
+        #status { font-size: .85rem; color: var(--muted); min-height: 1.5em; }
+        #status .warn { color: var(--warn); }
+        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 12px; }
+        .apod { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+        .media { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #000; }
+        .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .media.video::after {
+            content: '▶'; position: absolute; inset: 0; margin: auto; width: 56px; height: 56px; display: grid; place-items: center;
+            border-radius: 50%; background: rgb(0 0 0 / .6); color: #fff; font-size: 1.4rem;
+        }
+        .body { padding: 12px 14px 14px; display: grid; gap: 6px; }
+        .meta { margin: 0; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: .8rem; }
+        .kind { background: var(--badge); color: var(--text); border-radius: 999px; padding: 1px 8px; font-size: .75rem; }
+        .apod h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; }
+        .apod h2 a { color: var(--text); text-decoration: none; }
+        .apod h2 a:hover { color: var(--accent); }
+        .explanation { margin: 0; font-size: .9rem; }
+        .credit { margin: 0; font-size: .8rem; color: var(--muted); }
+        .credit::before { content: '© '; }
+        footer { color: var(--muted); font-size: .8rem; }
+        @media (max-width: 480px) { input[type=url] { width: 100%; } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Astronomy Picture of the Day</h1>
+        <p>NASA's APOD feed (<code>science.nasa.gov/wp-json/wp/v2/apod-basic</code>), rendered as HTML by <strong>o2h-edge</strong>
+            and finished on this page.</p>
+    </header>
+    <main>
+        <form id="query">
+            <label>Page <input type="number" name="page" min="1" value="1"></label>
+            <label>Per page
+                <select name="per_page"><option>6</option><option selected>12</option><option>18</option><option>25</option></select>
+            </label>
+            <label>Worker <input type="url" name="worker" value="http://localhost:8787"></label>
+            <button type="submit">Show</button>
+            <button type="button" class="secondary" id="prev">← Newer</button>
+            <button type="button" class="secondary" id="next">Older →</button>
+        </form>
+        <p class="note">The API also lists <code>date_from</code> / <code>date_to</code>, but it rejects every date format tried
+            (ISO dates, compact dates, US and European orders, timestamps), so they're left out. <code>per_page</code> is capped at 25 by the API.</p>
+        <p id="status"></p>
+        <section id="results" aria-live="polite"></section>
+    </main>
+    <footer>
+        <p>How it works: this page stores a record (its tree config and pipes, prepared by o2h's <code>prepareO2HRecord</code>) with the worker,
+            then asks it to call the API and render the JSON. The worker renders what it can: the dates and the image / video badge come from
+            <em>data pipes</em>, which run there. The explanations and credits need a function pipe (HTML to plain text), which can't
+            reach the worker, so they arrive marked pending (hidden), and this page fills them in while hydrating (<code>adopt: 'pending'</code>).</p>
+    </footer>
+
+    <script type="module">
+        import { tree, choose } from 'assign-gingerly/DX/tree.js';
+        import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
+        import { assignFromAsync } from 'assign-gingerly/index.js';
+        import { prepareO2HRecord } from 'o2h/worker/client.js';
+
+        const API = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic';
+
+        // Pipes: data pipes run in the worker; function pipes only here (the worker leaves what needs them pending)
+        const pipes = dataPipes({
+            longDate: { intl: 'DateTimeFormat', locale: 'en-US', options: { dateStyle: 'long', timeZone: 'UTC' } },
+            kind: { map: { image: 'Image', video: 'Video' }, default: 'Other' },
+            // HTML (as the API sends explanations and credits) → plain text, parsed inertly (a template runs nothing, loads nothing)
+            plainText: html => {
+                const template = document.createElement('template');
+                template.innerHTML = html;
+                return template.content.textContent.replace(/^\s*Explanation:\s*/, '').trim();
+            },
+            shorten: text => (text.length > 320 ? `${text.slice(0, 317).trimEnd()}…` : text),
+            excerpt: { chain: ['plainText', 'shorten'] },
+        });
+
+        // One card per picture: the API returns an array, so '*' renders each item
+        const card = tree`
+            <article class="apod">
+                ${choose('?.media_type', {
+                    // hdurl is the image (for videos, a still); url and permalink are the article
+                    video: tree`<a class="media video" href=${'?.permalink'} target="_blank" rel="noopener" aria-label="Watch on NASA"><img src=${'?.hdurl'} alt=${'?.alt'} loading="lazy"></a>`,
+                }, tree`<a class="media" href=${'?.permalink'} target="_blank" rel="noopener"><img src=${'?.hdurl'} alt=${'?.alt'} loading="lazy"></a>`)}
+                <div class="body">
+                    <p class="meta"><span class="kind">${'?.media_type?.kind'}</span><time datetime=${'?.date'}>${'?.date?.longDate'}</time></p>
+                    <h2><a href=${'?.permalink'} target="_blank" rel="noopener">${'?.title'}</a></h2>
+                    <p class="explanation">${'?.explanation?.excerpt'}</p>
+                    <p class="credit">${'?.credit?.plainText'}</p>
+                </div>
+            </article>`;
+        const config = { map: { '*': card } };
+
+        const form = document.getElementById('query');
+        const results = document.getElementById('results');
+        const status = document.getElementById('status');
+        const say = (html) => { status.innerHTML = html; };
+        const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+        // The record, prepared once: { key, record, lost }. The style option hides pending parts until they're finished.
+        const prepared = prepareO2HRecord(config, { pipes, style: true });
+        const stored = new Set();
+
+        async function show() {
+            const data = new FormData(form);
+            const worker = String(data.get('worker')).replace(/\/+$/, '');
+            const api = `${API}?page=${data.get('page')}&per_page=${data.get('per_page')}`;
+            for (const button of form.querySelectorAll('button')) button.disabled = true;
+            say('Loading…');
+            try {
+                const { key, record, lost } = await prepared;
+                if (!stored.has(worker)) {
+                    const put = await fetch(`${worker}/records/${key}`, { method: 'PUT', body: JSON.stringify(record) });
+                    if (!put.ok) throw new Error(`storing the record: ${put.status} ${(await put.json().catch(() => ({}))).error ?? ''}`);
+                    stored.add(worker);
+                }
+                const started = performance.now();
+                const response = await fetch(`${worker}/render?api=${encodeURIComponent(api)}&config=${key}`);
+                const elapsed = Math.round(performance.now() - started);
+                const type = response.headers.get('Content-Type') ?? '';
+                if (type.startsWith('text/html')) {
+                    // Rendered by the worker: assign it, then hydrate with the real pipes (finishing the pending parts)
+                    results.innerHTML = await response.text();
+                    const pending = results.querySelectorAll('[data-pending]').length;
+                    const embedded = JSON.parse(results.querySelector('script[type="application/json"][data-tree="tree"]').textContent);
+                    await assignFromAsync(results, { '?. =>': { do: 'builtIns.tree', adopt: 'pending', ...config } }, { from: embedded, pipes });
+                    say(`${embedded.length} pictures, rendered by the worker in ${elapsed} ms. ${pending} parts needed this page's code
+                        (${lost.map(l => `<code>${escape(l.name ?? l.path)}</code>`).join(', ')}), finished here while hydrating.`);
+                } else if (response.ok) {
+                    // The worker passed the JSON through (no record, or rendering failed): render it here instead
+                    const items = await response.json();
+                    results.replaceChildren();
+                    await assignFromAsync(results, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: items, pipes });
+                    say(`<span class="warn">Rendered on this page: the worker said "${escape(response.headers.get('X-O2H-Error') ?? 'nothing')}".</span>`);
+                } else {
+                    const { error } = await response.json().catch(() => ({ error: response.statusText }));
+                    results.replaceChildren();
+                    say(`<span class="warn">${response.status}: ${escape(error)}</span>`);
+                }
+            } catch (e) {
+                say(`<span class="warn">${escape(e.message)}. Is the worker running (<code>npm run dev</code>)?</span>`);
+            } finally {
+                for (const button of form.querySelectorAll('button')) button.disabled = false;
+                document.getElementById('prev').disabled = Number(form.page.value) <= 1;
+                document.body.dataset.ready = 'true';
+            }
+        }
+
+        form.addEventListener('submit', event => { event.preventDefault(); show(); });
+        document.getElementById('prev').addEventListener('click', () => { form.page.value = Math.max(1, Number(form.page.value) - 1); show(); });
+        document.getElementById('next').addEventListener('click', () => { form.page.value = Number(form.page.value) + 1; show(); });
+        show();
+    </script>
+</body>
+</html>

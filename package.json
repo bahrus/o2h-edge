@@ -10,10 +10,12 @@
     "types": "wrangler types --strict-vars=false",
     "check": "tsc --noEmit -p .",
     "test": "node --test \"test/*.test.*\"",
-    "update": "ncu -u && npm install"
+    "update": "ncu -u && npm install",
+    "serve": "node ./node_modules/spa-ssi/serve.js"
   },
   "license": "MIT",
   "devDependencies": {
+    "spa-ssi": "^0.0.28",
     "typescript": "^7.0.2",
     "wrangler": "^4.152.0"
   },

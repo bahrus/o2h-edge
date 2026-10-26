@@ -41,6 +41,18 @@ A public worker that calls any URL would be a proxy anyone could abuse, so it le
 
 All of these are `vars` in `wrangler.jsonc`.
 
+## Demo: NASA's Astronomy Picture of the Day
+
+[`demo/apod.html`](demo/apod.html) shows NASA's APOD feed (`https://science.nasa.gov/wp-json/wp/v2/apod-basic`) as a grid of cards, rendered by this worker and finished on the page, with a form for the page number and page size.
+
+1. `npm run dev`: the worker, at http://localhost:8787.
+2. `npm run serve` in a second terminal: spa-ssi serves this repo (port 8000, or the next free one; set `PORT` to choose), with [`imports.html`](imports.html) as the import map.
+3. Open `/demo/apod.html`.
+
+The page stores its record (a tree config and pipes), then asks the worker to render each page of the feed. The dates and the image / video badges use **data pipes**, so the worker renders them. The explanations and credits need a **function** pipe (HTML to plain text), so they arrive marked pending (hidden), and the page fills them in while hydrating. The status line says how many parts that was.
+
+**Served from the beGingerly workspace instead** (its `npm run serve`), the page is at `/o2h-edge/demo/apod.html`, and the workspace's `imports.html` maps `o2h/` and `assign-gingerly/` to the sibling repos.
+
 ## Developing
 
 - **`npm run dev`:** `wrangler dev`, the worker on your machine, in Cloudflare's runtime, with local KV.
