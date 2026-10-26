@@ -75,3 +75,42 @@ Each of those touches a different layer. Here's what I'd expect it to show, and 
 2. **Should routes and shells come first,** as their own chat, before any store code? Or is stage 1 first, to collect the friction?
 3. **Login:** include it (the page calls `/auth/login` directly, and keeps the token in `sessionStorage` to show "signed in as …"), or leave it out, since the fake API doesn't really tie carts to the login?
 4. **Where should the store live?** I'd say `o2h-edge/demo/store/`, next to APOD. Or should it be its own repo, if it's meant to grow into a reference app?
+
+## Bruce's Response
+
+This sounds like a good plan.  For stage 1 let's go with one page, no routes, and work on the points of friction, before moving on.  We can hold off on the login as well.
+
+I agree o2h-edge/demo/store
+
+
+
+## Claude's Implementation Notes: Stage 1
+
+**The page:** [`demo/store/index.html`](../demo/store/index.html). Serve it as for APOD, and open `/demo/store/index.html`.
+- **Three transforms, one page:**
+  - **categories:** `/products/categories`, as links;
+  - **products:** `/products`, or `/products/category/<name>`, as a grid of cards with photo, category, title, price and rating;
+  - **product:** `/products/<id>`.
+- **Links change the hash** (`#category/jewelery`, `#product/3`), so Back and Forward work, a view can be linked to, and the page needs **no event bindings at all**.
+- **Checked in Chromium against the live API, through `wrangler dev`:**
+  - 20 products, 4 categories, the category filter, a product view, and Back;
+  - no horizontal scroll at 375px.
+  - **Every part is rendered by the worker.** `data-pending` is 0 on every view, since only data pipes are used. Each render takes about 120 ms locally, including the upstream call.
+
+**What went smoothly** (no change needed):
+- **Prices:** the `intl` NumberFormat currency data pipe.
+- **Star ratings without arithmetic:** a `<meter min="0" max="5" value=…>`, drawn as five stars by a CSS mask. The worker renders it as a plain attribute, and it's accessible as a meter. This is a pattern worth showing in the docs.
+- **Links built from data:** `{ '?.href =&': { join: ['#product/', '?.id'] } }`, spread into the element's pattern. o2h's worker renders it, through `evaluateOther`.
+
+**Friction, most useful first:**
+1. **The edge-rendering boilerplate is now copied in two demos.** APOD and the store each have about 40 lines of the same logic: store the transform once per worker, call `/render`, put in the HTML, read the embedded JSON, hydrate with `adopt: 'pending'`, and fall back to rendering on the page when the worker passes the JSON back. That belongs in a client helper, for example in `o2h/worker/client.js` or an o2h-edge client module: `renderViaEdge(container, { worker, api, config, pipes })`. **This is the first thing I'd add.** It's also what the stage 3 routes would build on.
+2. **Attribute text with data in it is verbose.** `href="#product/${'?.id'}"` would be the natural thing to write in `` tree`…` ``, but mixed attribute text isn't supported, hence the `'?.href =&'` join spread. `` tree`…` `` could compile mixed attribute text into that join, like it already compiles mixed *content* into a `microJoin`. It's a small DX change in `DX/tree.ts`.
+3. **A render has nothing but the API's JSON to go on.** Marking the current category (`aria-current`) needs to know the selected category, which isn't in the data. Comparing against it isn't possible either. So the page does that one thing after hydration. When routes arrive, route parameters (`$route?.category`), plus a small equality data pipe, would let the worker do it. **This is a requirement for the routes chat**, more than for assign-gingerly now.
+4. **An object API can't be rendered as one element.** `/products/<id>` returns an object, so the tree renders one element per key. I laid them out with CSS grid areas inside a static `<article>`, which works fine. A "the whole value as one element" spec would make it more natural, but this is minor.
+5. **spa-ssi serves its site map for `/demo/store/`,** not the directory's `index.html`. Defaulting to `index.html` would help.
+
+**Not reached yet** (stage 4, the cart): totals (aggregate data pipes), joins, page state and events.
+
+**Also:** assign-gingerly's `pipes/dataPipes.ts` comment and `docs/pipes.md` still said `prepareO2HRecord`. Both are fixed; the `.js` is left for your build.
+
+**Question:** should I start with 1 (the client helper) and 2 (mixed attribute text in `` tree`…` ``) before stage 2? Item 3 would go into the routes chat.

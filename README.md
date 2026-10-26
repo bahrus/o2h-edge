@@ -60,6 +60,10 @@ The page stores its transform (a tree config and pipes), then asks the worker to
 
 **Served from the beGingerly workspace instead** (its `npm run serve`), the page is at `/o2h-edge/demo/apod.html`, and the workspace's `imports.html` maps `o2h/` and `assign-gingerly/` to the sibling repos.
 
+## Demo: a store
+
+[`demo/store/index.html`](demo/store/index.html) is a one-page store over the [Fake Store API](https://fakestoreapi.com/docs): category links, a product grid (photo, price, star rating) and a product view. They're three transforms, all rendered by the worker, since only data pipes are used. Links change the hash (`#category/jewelery`, `#product/3`), and the page renders what it names. Serve it like the APOD demo, and open `/demo/store/index.html` (with the file name: spa-ssi serves its site map for a bare directory).
+
 ## Demo: the stored transforms
 
 [`demo/transforms.html`](demo/transforms.html) lists the transforms a worker holds: key, the data fields each reads, size and date. Open one to see its JSON, indented and colored. **Copy raw** copies it exactly as stored, so storing the copy elsewhere gives the same key. Serve it like the APOD demo. For a deployed worker, enter its URL and the admin token, which the page keeps for that tab only (`sessionStorage`).
