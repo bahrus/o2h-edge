@@ -73,7 +73,7 @@
         <section id="results" aria-live="polite"></section>
     </main>
     <footer>
-        <p>How it works: this page stores a record (its tree config and pipes, prepared by o2h's <code>prepareO2HRecord</code>) with the worker,
+        <p>How it works: this page stores a transform (its tree config and pipes, prepared by o2h's <code>prepareO2HTransform</code>) with the worker,
             then asks it to call the API and render the JSON. The worker renders what it can: the dates and the image / video badge come from
             <em>data pipes</em>, which run there. The explanations and credits need a function pipe (HTML to plain text), which can't
             reach the worker, so they arrive marked pending (hidden), and this page fills them in while hydrating (<code>adopt: 'pending'</code>).</p>
@@ -83,7 +83,7 @@
         import { tree, choose } from 'assign-gingerly/DX/tree.js';
         import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
         import { assignFromAsync } from 'assign-gingerly/index.js';
-        import { prepareO2HRecord } from 'o2h/worker/client.js';
+        import { prepareO2HTransform } from 'o2h/worker/client.js';
 
         const API = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic';
 
@@ -126,8 +126,8 @@
         const say = (html) => { status.innerHTML = html; };
         const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 
-        // The record, prepared once: { key, record, lost }. The style option hides pending parts until they're finished.
-        const prepared = prepareO2HRecord(config, { pipes, style: true });
+        // The transform, prepared once: { key, transform, lost }. The style option hides pending parts until they're finished.
+        const prepared = prepareO2HTransform(config, { pipes, style: true });
         const stored = new Set();
 
         async function show() {
@@ -137,14 +137,14 @@
             for (const button of form.querySelectorAll('button')) button.disabled = true;
             say('Loading…');
             try {
-                const { key, record, lost } = await prepared;
+                const { key, transform, lost } = await prepared;
                 if (!stored.has(worker)) {
-                    const put = await fetch(`${worker}/records/${key}`, { method: 'PUT', body: JSON.stringify(record) });
-                    if (!put.ok) throw new Error(`storing the record: ${put.status} ${(await put.json().catch(() => ({}))).error ?? ''}`);
+                    const put = await fetch(`${worker}/transforms/${key}`, { method: 'PUT', body: JSON.stringify(transform) });
+                    if (!put.ok) throw new Error(`storing the transform: ${put.status} ${(await put.json().catch(() => ({}))).error ?? ''}`);
                     stored.add(worker);
                 }
                 const started = performance.now();
-                const response = await fetch(`${worker}/render?api=${encodeURIComponent(api)}&config=${key}`);
+                const response = await fetch(`${worker}/render?api=${encodeURIComponent(api)}&transform=${key}`);
                 const elapsed = Math.round(performance.now() - started);
                 const type = response.headers.get('Content-Type') ?? '';
                 if (type.startsWith('text/html')) {
@@ -158,7 +158,7 @@
                     say(`${embedded.length} pictures, rendered by the worker in ${elapsed} ms. ${pending} parts needed this page's code
                         (${lost.map(l => `<code>${escape(l.name ?? l.path)}</code>`).join(', ')}), finished here while hydrating.`);
                 } else if (response.ok) {
-                    // The worker passed the JSON through (no record, or rendering failed): render it here instead
+                    // The worker passed the JSON through (no transform, or rendering failed): render it here instead
                     const items = await response.json();
                     results.replaceChildren();
                     await assignFromAsync(results, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: items, pipes });

@@ -1,10 +1,10 @@
 /**
  * o2h-edge: renders JSON APIs as HTML with o2h, at the edge (a Cloudflare Worker).
  *
- *   PUT /records/<key>                     store a record (o2h's prepareO2HRecord: { config, options }),
- *                                          keyed by the hash of its content
- *   GET /render?api=<url>&config=<key>     call the API, and render its JSON with that record:
- *                                          HTML, with the JSON embedded after it, for the page to hydrate
+ *   PUT /transforms/<key>                   store a transform (o2h's prepareO2HTransform: { config, options }),
+ *                                           keyed by the hash of its content
+ *   GET /render?api=<url>&transform=<key>   call the API, and render its JSON with that transform:
+ *                                           HTML, with the JSON embedded after it, for the page to hydrate
  *
  * The rendering itself is o2h's shared worker core (o2h/worker/core.js), as in o2h's service worker: what
  * needs code the worker can't have (function pipes, manager classes) is left to the page, marked pending.
@@ -14,7 +14,7 @@
 
 import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import { errorResponse, guardedFetch, refuseApiUrl } from './guards.js';
-import { getRecord, putRecord } from './records.js';
+import { getTransform, putTransform } from './transforms.js';
 
 const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -29,22 +29,22 @@ export default {
         if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
         const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
-        if (url.pathname === '/render' || url.pathname.startsWith('/records/')) {
+        if (url.pathname === '/render' || url.pathname.startsWith('/transforms/')) {
             const { success } = await env.LIMITER.limit({ key: ip });
             if (!success) return errorResponse(429, 'too many requests: try again in a minute');
         }
 
-        if (url.pathname.startsWith('/records/')) {
-            if (request.method !== 'PUT') return errorResponse(405, 'records are stored with PUT');
-            const refused = await putRecord(env, url.pathname.slice('/records/'.length), await request.text());
+        if (url.pathname.startsWith('/transforms/')) {
+            if (request.method !== 'PUT') return errorResponse(405, 'transforms are stored with PUT');
+            const refused = await putTransform(env, url.pathname.slice('/transforms/'.length), await request.text());
             return refused ? errorResponse(400, refused) : new Response(null, { status: 204, headers: CORS });
         }
 
         if (url.pathname === '/render') {
             if (request.method !== 'GET') return errorResponse(405, 'render with GET');
             const api = url.searchParams.get('api');
-            const key = url.searchParams.get('config');
-            if (!api || !key) return errorResponse(400, 'render needs ?api=<url>&config=<key>');
+            const key = url.searchParams.get('transform');
+            if (!api || !key) return errorResponse(400, 'render needs ?api=<url>&transform=<key>');
             let apiUrl: URL;
             try {
                 apiUrl = new URL(api);
@@ -55,12 +55,12 @@ export default {
             if (refused) return errorResponse(403, refused);
             // The core forwards this (without the header), through the guards, and renders the JSON
             const marked = new Request(apiUrl, { headers: { [O2H_HEADER]: key } });
-            const response = await handleO2HRequest(marked, k => getRecord(env, k), guardedFetch(env));
+            const response = await handleO2HRequest(marked, k => getTransform(env, k), guardedFetch(env));
             return withCors(response);
         }
 
         if (url.pathname === '/') {
-            return new Response('o2h-edge: PUT /records/<key>, GET /render?api=<url>&config=<key>\n', {
+            return new Response('o2h-edge: PUT /transforms/<key>, GET /render?api=<url>&transform=<key>\n', {
                 headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS },
             });
         }

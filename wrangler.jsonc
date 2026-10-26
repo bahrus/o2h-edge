@@ -3,11 +3,11 @@
 	"name": "o2h-edge",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-01",
-	// Records ({ config, options } from o2h's prepareO2HRecord), keyed by the hash of their content.
+	// Transforms ({ config, options } from o2h's prepareO2HTransform), keyed by the hash of their content.
 	// No id: wrangler creates the namespace on the first deploy (and `wrangler dev` uses a local one).
 	"kv_namespaces": [
 		{
-			"binding": "RECORDS",
+			"binding": "TRANSFORMS",
 			"id": "9d4915e551874c2dabf86f0c7709db45"
 		}
 	],
@@ -31,7 +31,7 @@
 		// Guards on upstream calls
 		"MAX_RESPONSE_BYTES": 5000000,
 		"UPSTREAM_TIMEOUT_MS": 10000,
-		"MAX_RECORD_BYTES": 262144,
+		"MAX_TRANSFORM_BYTES": 262144,
 		// Tests only (wrangler dev --var ALLOW_LOCAL_UPSTREAM:on): lets localhost APIs through, from localhost
 		"ALLOW_LOCAL_UPSTREAM": "off"
 	},
