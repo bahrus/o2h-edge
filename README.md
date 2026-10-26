@@ -2,6 +2,12 @@
 
 A Cloudflare Worker that renders JSON APIs as HTML with [o2h](https://github.com/bahrus/o2h), at the edge.
 
+## Workflow
+
+For this to work, we need to pass to the cloudflare worker *what* to display -- the url of the api, the query string parameters, headers, etc.
+
+But before doing that, we need to indicate *how* to display it.  For that, the page needs to store a "record". 
+
 A page stores a **record** (the config and options it would use with [builtIns.tree](https://github.com/bahrus/assign-gingerly/blob/baseline/docs/tree.md) on the client), then asks the worker to call an API and render its JSON with that record. The worker returns HTML with the JSON embedded after it, and the page hydrates it. It's the same shared core as o2h's service worker (`o2h/worker/core.js`), running at the edge instead.
 
 ## Endpoints
