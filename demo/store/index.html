@@ -94,8 +94,7 @@
     <script type="module">
         import { tree } from 'assign-gingerly/DX/tree.js';
         import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
-        import { assignFromAsync } from 'assign-gingerly/index.js';
-        import { prepareO2HTransform } from 'o2h/worker/client.js';
+        import { renderViaEdge } from 'o2h/worker/edge.js';
 
         const API = 'https://fakestoreapi.com';
 
@@ -160,45 +159,11 @@
         const status = document.getElementById('status');
         const workerInput = document.getElementById('worker');
         const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-        const notes = [];
+        const options = { pipes, style: true };
 
-        // Each view's transform, prepared once, and stored once per worker
-        for (const view of Object.values(views)) view.prepared = prepareO2HTransform(view.config, { pipes, style: true });
-        const stored = new Set();
-
-        /** Render a view's API through the worker into its container, and hydrate it. Falls back to rendering here. */
+        /** Render a view through the worker into its container (hydrated there). */
         async function render(view, arg) {
-            const worker = workerInput.value.replace(/\/+$/, '');
-            const api = view.api(arg);
-            const { key, transform, lost } = await view.prepared;
-            if (lost.length) notes.push(`${lost.length} part(s) of a transform need this page's code`);
-            if (!stored.has(`${worker} ${key}`)) {
-                const put = await fetch(`${worker}/transforms/${key}`, { method: 'PUT', body: JSON.stringify(transform) });
-                if (!put.ok) throw new Error(`storing a transform: ${put.status} ${(await put.json().catch(() => ({}))).error ?? ''}`);
-                stored.add(`${worker} ${key}`);
-            }
-            const started = performance.now();
-            const response = await fetch(`${worker}/render?api=${encodeURIComponent(api)}&transform=${key}`);
-            const elapsed = Math.round(performance.now() - started);
-            const type = response.headers.get('Content-Type') ?? '';
-            const { container, config } = view;
-            if (type.startsWith('text/html')) {
-                container.innerHTML = await response.text();
-                const data = JSON.parse(container.querySelector('script[type="application/json"][data-tree="tree"]').textContent);
-                const pending = container.querySelectorAll('[data-pending]').length;
-                await assignFromAsync(container, { '?. =>': { do: 'builtIns.tree', adopt: 'pending', ...config } }, { from: data, pipes });
-                return { elapsed, pending, data };
-            }
-            if (!response.ok) {
-                const { error } = await response.json().catch(() => ({ error: response.statusText }));
-                throw new Error(`${response.status}: ${error}`);
-            }
-            // The worker passed the JSON through (no transform, or rendering failed): render it here
-            const data = await response.json();
-            container.replaceChildren();
-            await assignFromAsync(container, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: data, pipes });
-            notes.push(`rendered on this page: the worker said "${response.headers.get('X-O2H-Error') ?? 'nothing'}"`);
-            return { elapsed, pending: 0, data };
+            return renderViaEdge(view.container, { worker: workerInput.value, api: view.api(arg), config: view.config, options });
         }
 
         // Which view the hash names: #product/3, #category/electronics, or everything
@@ -221,7 +186,6 @@
         let categoriesShown;
         async function show() {
             const { kind, value } = route();
-            notes.length = 0;
             status.textContent = 'Loading…';
             try {
                 categoriesShown ??= render(views.categories);
@@ -230,10 +194,11 @@
                 const detail = kind === 'product';
                 document.getElementById('detail').hidden = !detail;
                 views.products.container.hidden = detail;
-                const { elapsed, pending, data } = detail ? await render(views.product, value) : await render(views.products, kind === 'category' ? value : undefined);
+                const { by, error, elapsed, pending, data } = detail ? await render(views.product, value) : await render(views.products, kind === 'category' ? value : undefined);
                 const what = detail ? escape(data.title) : `${data.length} products${kind === 'category' ? ` in ${escape(value)}` : ''}`;
-                status.innerHTML = `${what}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
-                    + notes.map(n => ` <span class="warn">${escape(n)}.</span>`).join('');
+                status.innerHTML = by === 'worker'
+                    ? `${what}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
+                    : `${what}, <span class="warn">rendered on this page: the worker said "${escape(error ?? 'nothing')}".</span>`;
                 if (detail) document.title = `${data.title} · Fake Store`; else document.title = 'Fake Store via o2h-edge';
             } catch (e) {
                 categoriesShown = undefined;

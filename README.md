@@ -20,6 +20,19 @@ But before doing that, we first need to indicate *how* to display it.  For that,
 
 **Every response allows any origin** (CORS), since the pages calling the worker live elsewhere. `X-O2H-Error` is exposed to them.
 
+**From a page,** o2h's `renderViaEdge` does the whole round trip: it stores the transform (once), renders, inserts the HTML, and hydrates it. When the worker passes the JSON back, the page renders it itself. Both demos use it.
+
+```js
+import { renderViaEdge } from 'o2h/worker/edge.js';
+
+const options = { pipes, managers, style: true };
+const { by, data, pending } = await renderViaEdge(container, {
+    worker: 'https://o2h-edge.<your-subdomain>.workers.dev', api: apiUrl, config, options,
+});
+```
+
+By hand, it's two requests:
+
 ```js
 import { prepareO2HTransform } from 'o2h/worker/client.js';
 

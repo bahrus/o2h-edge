@@ -82,8 +82,7 @@
     <script type="module">
         import { tree, choose } from 'assign-gingerly/DX/tree.js';
         import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
-        import { assignFromAsync } from 'assign-gingerly/index.js';
-        import { prepareO2HTransform } from 'o2h/worker/client.js';
+        import { renderViaEdge } from 'o2h/worker/edge.js';
 
         const API = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic';
 
@@ -126,47 +125,24 @@
         const say = (html) => { status.innerHTML = html; };
         const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 
-        // The transform, prepared once: { key, transform, lost }. The style option hides pending parts until they're finished.
-        const prepared = prepareO2HTransform(config, { pipes, style: true });
-        const stored = new Set();
+        // One options object, so the transform is prepared once (the style option hides pending parts until they're finished)
+        const options = { pipes, style: true };
 
         async function show() {
             const data = new FormData(form);
-            const worker = String(data.get('worker')).replace(/\/+$/, '');
             const api = `${API}?page=${data.get('page')}&per_page=${data.get('per_page')}`;
             for (const button of form.querySelectorAll('button')) button.disabled = true;
             say('Loading…');
             try {
-                const { key, transform, lost } = await prepared;
-                if (!stored.has(worker)) {
-                    const put = await fetch(`${worker}/transforms/${key}`, { method: 'PUT', body: JSON.stringify(transform) });
-                    if (!put.ok) throw new Error(`storing the transform: ${put.status} ${(await put.json().catch(() => ({}))).error ?? ''}`);
-                    stored.add(worker);
-                }
-                const started = performance.now();
-                const response = await fetch(`${worker}/render?api=${encodeURIComponent(api)}&transform=${key}`);
-                const elapsed = Math.round(performance.now() - started);
-                const type = response.headers.get('Content-Type') ?? '';
-                if (type.startsWith('text/html')) {
-                    // Rendered by the worker: assign it, then hydrate with the real pipes (finishing the pending parts)
-                    // This could alternatively use the streaming API's, especially when browsers 
-                    // support them (non beta).
-                    results.innerHTML = await response.text();
-                    const pending = results.querySelectorAll('[data-pending]').length;
-                    const embedded = JSON.parse(results.querySelector('script[type="application/json"][data-tree="tree"]').textContent);
-                    await assignFromAsync(results, { '?. =>': { do: 'builtIns.tree', adopt: 'pending', ...config } }, { from: embedded, pipes });
-                    say(`${embedded.length} pictures, rendered by the worker in ${elapsed} ms. ${pending} parts needed this page's code
+                // Rendered by the worker, then hydrated here with the real pipes (finishing the pending parts)
+                const { by, data: pictures, elapsed, pending, lost, error } = await renderViaEdge(results, {
+                    worker: String(data.get('worker')), api, config, options,
+                });
+                if (by === 'worker') {
+                    say(`${pictures.length} pictures, rendered by the worker in ${elapsed} ms. ${pending} parts needed this page's code
                         (${lost.map(l => `<code>${escape(l.name ?? l.path)}</code>`).join(', ')}), finished here while hydrating.`);
-                } else if (response.ok) {
-                    // The worker passed the JSON through (no transform, or rendering failed): render it here instead
-                    const items = await response.json();
-                    results.replaceChildren();
-                    await assignFromAsync(results, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: items, pipes });
-                    say(`<span class="warn">Rendered on this page: the worker said "${escape(response.headers.get('X-O2H-Error') ?? 'nothing')}".</span>`);
                 } else {
-                    const { error } = await response.json().catch(() => ({ error: response.statusText }));
-                    results.replaceChildren();
-                    say(`<span class="warn">${response.status}: ${escape(error)}</span>`);
+                    say(`<span class="warn">Rendered on this page: the worker said "${escape(error ?? 'nothing')}".</span>`);
                 }
             } catch (e) {
                 say(`<span class="warn">${escape(e.message)}. Is the worker running (<code>npm run dev</code>)?</span>`);

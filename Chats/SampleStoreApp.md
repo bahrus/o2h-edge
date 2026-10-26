@@ -114,3 +114,42 @@ I agree o2h-edge/demo/store
 **Also:** assign-gingerly's `pipes/dataPipes.ts` comment and `docs/pipes.md` still said `prepareO2HRecord`. Both are fixed; the `.js` is left for your build.
 
 **Question:** should I start with 1 (the client helper) and 2 (mixed attribute text in `` tree`…` ``) before stage 2? Item 3 would go into the routes chat.
+
+## Bruce's Response II
+
+Please proceed with:
+
+>  1. **The edge-rendering boilerplate is now copied in two demos.**
+
+I'll want to study that and see if it makes sense to move it to a dependency package and/or wrap it as a custom element or something.
+
+## Claude's Implementation Notes II: the client helper
+
+**`renderViaEdge` is a new o2h module:** `o2h/worker/edge.ts`, exported as `o2h/worker/edge.js`. I kept it out of `worker/client.js`, so pages using only the service worker don't load assign-gingerly. It's easy to move wherever you decide it belongs.
+
+```js
+import { renderViaEdge } from 'o2h/worker/edge.js';
+
+const options = { pipes, style: true };
+const { by, data, elapsed, pending, lost, error } = await renderViaEdge(container, { worker, api, config, options, hydrate: { registry } });
+```
+
+- **Stores the transform once per worker.** It's prepared once per `config` / `options` object pair, so the demos create their `options` once.
+- **Retries once:** if the worker answers "no transform", which happens after a restarted `wrangler dev` with fresh local KV, it stores the transform again and retries.
+- **Renders and hydrates:** the worker's HTML goes into the container, then builtIns.tree hydrates it with `adopt: 'pending'`, using the page's real pipes plus any `hydrate` options. It finds the embedded JSON by the config's `markerName` (default `tree`).
+- **Falls back:** when the worker passes the JSON back, the page renders it, and the result says `by: 'page'`, with the worker's reason in `error`.
+- **Throws** on worker or API errors, so each page decides what to say.
+
+**The demos now use it:**
+- **apod.html:** its render, hydrate and fallback block is now one call.
+- **store/index.html:** its `render()` is now one line.
+- Each page keeps only its own status messages.
+
+**Checked in Chromium:**
+- **APOD:** 12 pictures, with 24 parts finished on the page while hydrating, and nothing left pending.
+- **Store:** 20 products.
+- **The restart:** I then restarted the worker with **empty** storage, and clicked a category and then a product. Both still came back rendered by the worker, so the helper stored the transforms again on its own.
+
+**Docs:** o2h's README has a new section, "Edge first paint: o2h-edge". o2h-edge's README shows the helper first, then the two raw requests.
+
+**On a dependency package or a custom element:** the helper's inputs are already the attributes such an element would have: a worker URL, an API URL, a config and options. That makes an `<o2h-edge-view worker=… api=…>` wrapper straightforward, with the config and pipes set as properties. The one design question is how the element gets its config and code. An attribute can hold the worker URL and the API URL, but not the pipes.
