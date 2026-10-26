@@ -1,6 +1,6 @@
 # o2h-edge
 
-A Cloudflare Worker that renders JSON APIs as HTML with [o2h](https://github.com/bahrus/o2h), at the edge.  Note that o2h stands for [JavaScript] **O**bject to (2) **H**TML, which then needs to be hydrated in the browser's main page ("H2O", get it?)
+A Cloudflare Worker that renders external, proxied JSON APIs as HTML with [o2h](https://github.com/bahrus/o2h), at the edge.  Note that o2h stands for [JavaScript] **O**bject to (2) **H**TML, which then needs to be hydrated in the browser's main page ("H2O", get it?)
 
 ## Workflow
 
