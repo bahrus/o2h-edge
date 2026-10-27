@@ -103,9 +103,6 @@
             usd: { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } },
         });
 
-        // A link built from data: '#category/' + the category, '#product/' + the id
-        const hashLink = (prefix, path) => ({ '?.href =&': { join: [prefix, path] } });
-
         // A rating ({ rate, count }) at a path: five stars, and the numbers
         const stars = at => tree`
             <p class="rating">
@@ -118,7 +115,7 @@
             categories: {
                 container: document.getElementById('categories'),
                 api: () => `${API}/products/categories`,
-                config: { map: { '*': tree`<a ${hashLink('#category/', '?.')}>${'?.'}</a>` } },
+                config: { map: { '*': tree`<a href="#category/${'?.'}">${'?.'}</a>` } },
             },
             // [{ id, title, price, description, category, image, rating: { rate, count } }, …]
             products: {
@@ -127,7 +124,7 @@
                 config: {
                     map: {
                         '*': tree`
-                            <a class="product" ${hashLink('#product/', '?.id')}>
+                            <a class="product" href="#product/${'?.id'}">
                                 <div class="photo"><img src=${'?.image'} alt="" loading="lazy"></div>
                                 <div class="body">
                                     <p class="category">${'?.category'}</p>

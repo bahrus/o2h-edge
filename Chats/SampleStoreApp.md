@@ -153,3 +153,41 @@ const { by, data, elapsed, pending, lost, error } = await renderViaEdge(containe
 **Docs:** o2h's README has a new section, "Edge first paint: o2h-edge". o2h-edge's README shows the helper first, then the two raw requests.
 
 **On a dependency package or a custom element:** the helper's inputs are already the attributes such an element would have: a worker URL, an API URL, a config and options. That makes an `<o2h-edge-view worker=… api=…>` wrapper straightforward, with the config and pipes set as properties. The one design question is how the element gets its config and code. An attribute can hold the worker URL and the API URL, but not the pipes.
+
+## Bruce's Response III
+
+> 2. **Attribute text with data in it is verbose.** `href="#product/${'?.id'}"` would be the natural thing to write in `` tree`…` ``, but mixed attribute text isn't supported, hence the `'?.href =&'` join spread. `` tree`…` `` could compile mixed attribute text into that join, like it already compiles mixed *content* into a `microJoin`. It's a small DX change in `DX/tree.ts`.
+
+Please proceed with this fix.
+
+## Claude's Implementation Notes III: mixed attribute text in `` tree`…` ``
+
+**What you write now:**
+
+```js
+tree`<a class="product ${'?.kind'}" href="#product/${'?.id'}">${'?.title'}</a>`
+// → ['a', { 'class :=': { join: ['product ', '?.kind'] }, 'href :=': { join: ['#product/', '?.id'] }, textContent: '?.title' }]
+```
+
+**One change from my original suggestion:** I'd proposed compiling mixed attribute text into the `'?.href =&'` join that the store used. That sets a **property**, though, which only works for attributes that have a matching property (`href`, `title`). It fails for `aria-*`, `data-*` and custom attributes, and `class` isn't `className`. So the change is a small core addition, a **`{ join }` value for ` :=`**, which works for any attribute. `` tree`…` `` compiles mixed text into it.
+
+**assign-gingerly (`.ts` only; your watcher has rebuilt the `.js`):**
+- **`syncOps/join.ts`:** adds `isJoinValue(value)`, which recognizes `{ join: [...], separator? }`.
+- **`assignGingerly.ts`, `applyAttribute`:** a ` :=` value of `{ join }` (its paths already resolved, as any RHS is) is joined into one string, exactly as the `join` op does: no separator by default, nullish items dropped, nested sub-arrays all-or-nothing.
+- **`handlers/compileTree.ts`, `attributeText`:** the same rule. That's what o2h uses to render attributes, so **the worker renders these with no o2h change**. Compile doesn't bake them, since they aren't literals.
+- **`DX/tree.ts`, `attributeValue`:** mixed text becomes `{ join: [...] }`, and empty literal pieces are dropped.
+  - **Still errors:** mixed text in `.prop`, `@event` or `ish`, and a `${…}` in mixed text that's an object rather than a path or a literal.
+- **Docs:**
+  - `docs/attribute-operator.md`: the value table has a `{ join }` row;
+  - `docs/tree.md`: the mapping table has a row, the "Attribute values" note is rewritten, and the error example now uses `.title`.
+- **Tests:**
+  - `tests/dx-tree.html`, new Test 7b: the notation, and rendering class, href, title and a dropped nullish value, then a rebind (the same element, updated).
+  - Three existing checks used a mixed `class` as their example of an error. They now use `.title`, and there's a new check that an unknown value in mixed text is accepted.
+  - `tests/attribute-operator.html`, new Test 13: `{ join }` with a separator and a sub-array.
+  - **The full suite** (scratch copy, three browsers): the first run had 174 passed, 12 skipped, and 3 failed, all of them this DX test, before I updated its error checks. After that, the DX and attribute-operator specs pass in all three browsers (67/67 and 39/39). I didn't run the whole suite again.
+
+**o2h:** a new Node test renders `` tree`<a class="card ${…}" href="#product/${…}">` `` in o2h, and checks that both attributes come out as one joined string. 10/10 Node tests pass.
+
+**The store demo** now writes `href="#category/${'?.'}"` and `href="#product/${'?.id'}"`, and the `hashLink` helper is gone. Rechecked in Chromium: same results, all rendered by the worker, nothing pending.
+
+**The editor:** the Gingerly Tree Analyzer still underlines mixed attributes in the store page and in `dx-tree.html`. It seems to have loaded `analyzeTree` before the rebuild. A **Reload Window** should pick up the new one.
