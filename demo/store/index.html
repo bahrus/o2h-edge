@@ -54,19 +54,20 @@
         meter.stars::-moz-meter-bar { background: var(--star); }
 
         /* One product */
-        #product { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-areas: 'image title' 'image category' 'image price' 'image rating' 'image description'; gap: 8px 32px; align-content: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
-        #product img { grid-area: image; width: 100%; max-height: 420px; object-fit: contain; background: #fff; padding: 16px; border-radius: 8px; }
-        #product h2 { grid-area: title; margin: 0; font-size: 1.4rem; line-height: 1.3; }
-        #product .category { grid-area: category; font-size: .9rem; }
-        #product .price { grid-area: price; font-size: 1.4rem; }
-        #product .rating { grid-area: rating; font-size: .9rem; }
-        #product .description { grid-area: description; margin: 8px 0 0; }
+        #product article { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 32px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+        #product img { width: 100%; max-height: 420px; object-fit: contain; background: #fff; padding: 16px; border-radius: 8px; }
+        #product .info { display: grid; gap: 8px; }
+        #product h2 { margin: 0; font-size: 1.4rem; line-height: 1.3; }
+        #product .category { font-size: .9rem; }
+        #product .price { font-size: 1.4rem; }
+        #product .rating { font-size: .9rem; }
+        #product .description { margin: 8px 0 0; }
         .back { display: inline-block; margin-bottom: 12px; color: var(--accent); }
         [hidden] { display: none !important; }
 
         footer { color: var(--muted); font-size: .8rem; }
         @media (max-width: 640px) {
-            #product { grid-template-columns: 1fr; grid-template-areas: 'image' 'title' 'category' 'price' 'rating' 'description'; padding: 16px; }
+            #product article { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
             #products { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
         }
     </style>
@@ -82,7 +83,7 @@
         <section id="products" aria-live="polite"></section>
         <div id="detail" hidden>
             <a class="back" href="#">← All products</a>
-            <article id="product"></article>
+            <div id="product"></div>
         </div>
     </main>
     <footer>
@@ -136,18 +137,23 @@
                     },
                 },
             },
-            // { id, title, price, description, category, image, rating }: one element per key, laid out by CSS
+            // { id, title, price, description, category, image, rating }: one element for the whole product ('?.')
             product: {
                 container: document.getElementById('product'),
                 api: id => `${API}/products/${encodeURIComponent(id)}`,
                 config: {
                     map: {
-                        image: tree`<img src=${'?.'} alt=${'$parent?.title'}>`,
-                        title: tree`<h2>${'?.'}</h2>`,
-                        category: tree`<p class="category">${'?.'}</p>`,
-                        price: tree`<p class="price">${'?.usd'}</p>`,
-                        rating: stars(''),
-                        description: tree`<p class="description">${'?.'}</p>`,
+                        '?.': tree`
+                            <article>
+                                <img src=${'?.image'} alt=${'?.title'}>
+                                <div class="info">
+                                    <h2>${'?.title'}</h2>
+                                    <p class="category">${'?.category'}</p>
+                                    <p class="price">${'?.price?.usd'}</p>
+                                    ${stars('?.rating')}
+                                    <p class="description">${'?.description'}</p>
+                                </div>
+                            </article>`,
                     },
                 },
             },

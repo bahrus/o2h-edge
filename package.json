@@ -15,7 +15,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "spa-ssi": "^0.0.28",
+    "spa-ssi": "^0.0.30",
     "typescript": "^7.0.2",
     "wrangler": "^4.153.0"
   },

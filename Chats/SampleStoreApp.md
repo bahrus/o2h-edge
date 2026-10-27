@@ -191,3 +191,131 @@ tree`<a class="product ${'?.kind'}" href="#product/${'?.id'}">${'?.title'}</a>`
 **The store demo** now writes `href="#category/${'?.'}"` and `href="#product/${'?.id'}"`, and the `hashLink` helper is gone. Rechecked in Chromium: same results, all rendered by the worker, nothing pending.
 
 **The editor:** the Gingerly Tree Analyzer still underlines mixed attributes in the store page and in `dx-tree.html`. It seems to have loaded `analyzeTree` before the rebuild. A **Reload Window** should pick up the new one.
+
+## Bruce's Response IV
+
+> 5. **spa-ssi serves its site map for `/demo/store/`,** not the directory's `index.html`. Defaulting to `index.html` would help.
+
+This should work now
+
+> 4. **An object API can't be rendered as one element.** `/products/<id>` returns an object, so the tree renders one element per key. I laid them out with CSS grid areas inside a static `<article>`, which works fine. A "the whole value as one element" spec would make it more natural, but this is minor.
+
+This is not clear to me what needs to change.  Can you please provide more detail?
+
+## Claude's Thoughts IV: rendering a whole object as one element
+
+**Thanks for the spa-ssi fix.** Once o2h-edge's `spa-ssi` dependency picks it up, `/demo/store/` will open the store, and the README hint about `/index.html` can go.
+
+**On item 4, more concretely.** A tree's `map` renders **one element per key of the data**, and each key's spec only sees that key's value. That's ideal for a VM that's a collection of separate parts. It's awkward when the data is **one thing**, like a product, and the markup should be **one element containing all of it.**
+
+**What I wanted to write** for `/products/3`, the way I'd write the card in the grid:
+
+```js
+tree`
+    <article class="product-detail">
+        <img src=${'?.image'} alt=${'?.title'}>
+        <div class="info">
+            <h2>${'?.title'}</h2>
+            <p class="price">${'?.price?.usd'}</p>
+            ${stars('?.rating')}
+        </div>
+        <p class="description">${'?.description'}</p>
+    </article>`
+```
+
+Here `?.` would be **the whole product**. The grid gets that for free: its API returns an array, `'*'` applies to every key (`0`, `1`, …), and each item is one product. An object has no such key to hang the spec on.
+
+**What a map lets me write instead** is one element per key:
+
+```js
+map: {
+    image: tree`<img src=${'?.'} alt=${'$parent?.title'}>`,
+    title: tree`<h2>${'?.'}</h2>`,
+    price: tree`<p class="price">${'?.usd'}</p>`,
+    rating: stars(''),
+    description: tree`<p class="description">${'?.'}</p>`,
+}
+```
+
+That works, but:
+- **No wrapper can span several keys.** "The title, price and rating in an `.info` column" can't be expressed, since each key renders its own element. So the elements all land side by side in the container, and the layout falls to CSS grid areas, which is what the store does.
+- **A field used in another key's markup** needs `$parent`, like the image's `alt` (the title).
+- **Order and structure** follow the map, not the markup you'd naturally write.
+
+**The workaround today** is to borrow a key and use `$parent` throughout:
+
+```js
+map: { 'id /* detail */': tree`<article><img src=${'$parent?.image'}> … <h2>${'$parent?.title'}</h2> …</article>` }
+```
+
+It works, but it's a trick. It depends on the data having an `id`, and every path needs `$parent`.
+
+**What would help:** a way to say "render the whole value with this one spec." Two shapes I can think of:
+
+1. **A reserved map key for the whole value,** e.g. `'.'`: `map: { '.': tree`<article>…</article>` }`. `?.` is the VM itself. It could sit alongside other keys, or be the only one.
+2. **A `spec` in the tree config, in place of `map`:** `{ do: 'builtIns.tree', spec: tree`<article>…</article>` }`. It renders one element specification against the whole VM. That's the same thing a map value is, just without picking a key.
+
+I lean toward **2**. It reads as what it is ("this tree is one element"), it doesn't put a magic key into maps, and `TreeMap<T>` key suggestions aren't affected. o2h would need to support it too, through the same shared spec helpers, as would hydration (`adopt`). The markers and the embedded JSON stay as they are, since the tree still owns the container between its markers.
+
+**How much it matters:** low for now. The store's detail view works with CSS. It would matter more for:
+- **detail pages** in general (one record per page), which become common once routes arrive;
+- **any API that returns a single object** (a user, a cart, a config).
+
+**Questions:**
+1. Is option **2** (`spec`) the right shape, or would you rather have a reserved key?
+2. Should it go into the queue now, or wait until stage 3 (routes), where detail pages are the norm?
+
+Bruce's Response V
+
+**On item 4, more concretely.** A tree's `map` renders **one element per key of the data**, and each key's spec only sees that key's value. That's ideal for a VM that's a collection of separate parts. It's awkward when the data is **one thing**, like a product, and the markup should be **one element containing all of it.**
+
+Yes, this is a good observation.  That issue did occur vaguely in my mind, but you made the issue very clear.  This would be a clear win.
+
+> 2. Should it go into the queue now, or wait until stage 3 (routes), where detail pages are the norm?
+
+I'm inclined to go with the "." key, because with the new comments in keys, it could allow us to mix separate parts with root mappings.  And I suspect, maybe not with the store example one, but future ones, to support nested access mappings - "?.congress?.houseOfRepresentatives".  So I wonder if instead of "." it should be "?."?
+
+> 2. Should it go into the queue now, or wait until stage 3 (routes), where detail pages are the norm?
+
+I would like to resolve this first.
+
+## Claude's Implementation Notes V: path keys (`'?.'`, `'?.a?.b'`)
+
+**Done as you suggested:** a map key starting with `?.` is a **path into the VM**, not a VM key. `'?.'` is the VM itself, so one spec renders a whole object as one element. Deeper paths (`'?.congress?.houseOfRepresentatives'`) render the value they lead to. They mix freely with ordinary keys and with comments (`'?. /* footer */'`).
+
+```js
+map: {
+    '?.': tree`<article><img src=${'?.image'} alt=${'?.title'}><div class="info"><h2>${'?.title'}</h2>…</div></article>`,
+}
+```
+
+**I agree `'?.'` is better than `'.'`:** it reads as the path it is, it extends naturally to nested paths, and no real VM key starts with `?.`.
+
+**Rules I chose** (tell me if any should differ):
+- **Plain property steps only.** A path key follows properties: no pipes, `$parent`, methods or protocols. That keeps `mapEntries` pure, with an unchanged signature, so tree, `compile`, `adopt` and o2h all agree without changes. Formatting happens inside the spec (`'?.price?.usd'`). Pipes on key paths could come later, if a use appears.
+- **Inside the spec,** `?.` is the value at the path, and `$parent` is the VM, as for any top-level key.
+- **The key rules apply to the path's value:** nullish skips the entry (unless `keepNullish`), and a path that leads nowhere gets the typo warning on the first render. `'?.'` never warns, and it also works when the VM is a primitive.
+- **`'*'`:** a one-step path key (`'?.title'`) counts as naming `title`, so `'*'` doesn't render it again. `'?.'` and deeper paths name nothing.
+
+**assign-gingerly** (`.ts` only; your watcher has rebuilt the `.js`):
+- **`handlers/treeSpec.ts`:**
+  - `isPathKey` and `mapKeyValue(name, from)`, with each path split once and cached;
+  - `mapEntries` uses `mapKeyValue`, and applies the `'*'` rule above.
+- **`handlers/tree.ts`:** the typo warning checks path keys by their value.
+- **`handlers/compileTree.ts`:** a path key's compile sample comes from its path.
+- **`types/assign-gingerly/treeTypes.d.ts`** (the types submodule): `TreeMap<T>` also suggests `'?.'`, and its doc mentions path keys.
+- **`docs/tree.md`:** a row in the Keys table, and a new section, "Path keys: the whole VM, or a value deeper in it".
+- **Tests:**
+  - **`tests/tree-map-keys.html`, new Test 6:** the whole VM in one element, a nested path, a commented `'?.'`, rebind in place, a missing path skipped, `'*'` interplay, a primitive VM, the typo warning, compile (the same DOM) and adopt (every element reused).
+  - **`tests/pure-modules.spec.ts`:** `mapEntries` with path keys.
+  - **Full suite** (scratch copy, three browsers):
+    - The first run: 174 passed, 12 skipped. The 3 failures were all in `tree-map-keys`: my expected HTML had a `<span>` where microJoin renders a number as `<data value="3">`.
+    - After correcting it: `tree-map-keys` (17/17) and `pure-modules` pass in all three browsers.
+
+**o2h:** no code change; it gets path keys through `mapEntries`. A new Node test renders `'?.'`, a nested path, and a missing path that's skipped. 11/11 Node tests pass.
+
+**The store:**
+- **The product view is now one `'?.'` spec:** `<article>` with the image, then an `.info` column (title, category, price, stars, description).
+- **The CSS grid areas are gone**, along with the `$parent?.title` for the image's `alt`.
+- **The container** is now a plain `<div id="product">`.
+- **Rechecked in Chromium:** the same flow, all rendered by the worker, nothing pending, no horizontal scroll at 375px. The detail layout is tighter, since the info column flows naturally.
