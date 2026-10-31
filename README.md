@@ -16,6 +16,9 @@ But before doing that, we first need to indicate *how* to display it.  For that,
 | `GET /transforms/<key>` | The transform, exactly as stored: the JSON its key is the hash of. Cacheable for good (`immutable`), since a key always names the same content. |
 | `GET /transforms[?cursor=…]` | Lists the stored transforms: `{ transforms: [{ key, bytes, stored, summary }], cursor }`, up to 1000 a page (`cursor` asks for the next; `null` when there's none). `summary` names the data fields a transform reads. Transforms stored before the list existed have only a `key`. **Needs the admin token** (below), except on localhost. |
 | `GET /render?api=<url>&transform=<key>` | Calls the API (through the guards below), and renders its JSON with the transform. The result is `text/html`, with the JSON in `<script type="application/json" data-tree="tree">`. With no transform for the key, or a rendering error, the API's JSON comes back as is, with an `X-O2H-Error` header saying why. |
+| `PUT /o2h-app/<key>` | Installs an app ([navigate-gingerly](https://github.com/bahrus/navigate-gingerly)'s `prepareApp`): routes whose paths mirror an API's, and their transforms. Keyed by the hash of its content (`app-` and 32 hex digits) and checked like transforms, so anyone may install one, but nobody can change one. Capped at `MAX_APP_BYTES`. |
+| `GET /o2h-app/<key>` | The app, exactly as stored. Cacheable for good. |
+| `GET /o2h-app/<key>/<path>` | Matches the path to one of the app's routes, fetches the route's sources in parallel (each through the guards below), and renders the VM `{ route, ...sources }` with the route's transform: an HTML **fragment**, with the VM embedded, as `/render` returns. An aligned route fetches the path itself under the app's API (`/products/3` → `<api>/products/3`); the visitor's query string isn't passed on. `404` for no app (`no app …`: the page installs it again) or no route; a failing source answers with its status. |
 | `GET /` | A one-line description |
 
 **Every response allows any origin** (CORS), since the pages calling the worker live elsewhere. `X-O2H-Error` is exposed to them.
@@ -55,7 +58,7 @@ A public worker that calls any URL would be a proxy anyone could abuse, so it le
   - **other hosts** (custom domains) allow only what `DOMAIN_ALLOWLIST` lists for them: `{ "apis.example.com": ["https://api.nasa.gov"] }`.
 - **Targets:** `https` only, and named public hosts only (no IP literals, no localhost).
 - **Upstream calls:** `GET` only. Only an `Accept: application/json` header is sent: the caller's cookies, authorization and other headers aren't forwarded.
-- **Responses:** **JSON only**; anything else is refused (`415`), not passed through. They're capped at `MAX_RESPONSE_BYTES` (`413`), with a timeout of `UPSTREAM_TIMEOUT_MS` (`504`). Transforms are capped at `MAX_TRANSFORM_BYTES`.
+- **Responses:** **JSON only**; anything else is refused (`415`), not passed through. They're capped at `MAX_RESPONSE_BYTES` (`413`), with a timeout of `UPSTREAM_TIMEOUT_MS` (`504`). Transforms are capped at `MAX_TRANSFORM_BYTES`, and apps at `MAX_APP_BYTES`.
 - **Listing:** only with the admin token, `Authorization: Bearer <token>`, which must match the `LIST_TOKEN` secret (`npx wrangler secret put LIST_TOKEN`). Without the secret, listing is off (`403`). On localhost (`npm run dev`), no token is needed. Reading one transform by its key stays public, since anyone with the key can render with it anyway.
 - **Rate:** 60 requests a minute per IP (the `LIMITER` rate-limit binding; it works on `workers.dev`, where dashboard WAF rules don't apply).
 

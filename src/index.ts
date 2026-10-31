@@ -7,6 +7,10 @@
  *   GET /transforms[?cursor=…]              list them (key, size, date, summary): the admin token, or localhost
  *   GET /render?api=<url>&transform=<key>   call the API, and render its JSON with that transform:
  *                                           HTML, with the JSON embedded after it, for the page to hydrate
+ *   PUT /o2h-app/<key>                      install an app (navigate-gingerly's prepareApp), keyed likewise
+ *   GET /o2h-app/<key>                      an app, exactly as stored
+ *   GET /o2h-app/<key>/<path>               render a path of an app: its route's sources, as one HTML fragment
+ *                                           (src/apps.ts)
  *
  * The rendering itself is o2h's shared worker core (o2h/worker/core.js), as in o2h's service worker: what
  * needs code the worker can't have (function pipes, manager classes) is left to the page, marked pending.
@@ -17,6 +21,9 @@
 import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import { errorResponse, guardedFetch, refuseApiUrl, refuseListing } from './guards.js';
 import { getTransform, getTransformJson, listTransforms, putTransform } from './transforms.js';
+import { getAppJson, putApp, renderAppPath } from './apps.js';
+
+const APP_PATH = /^\/o2h-app\/([^/]+)(\/.*)?$/;
 
 const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -31,7 +38,8 @@ export default {
         if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
         const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
-        if (url.pathname === '/render' || url.pathname === '/transforms' || url.pathname.startsWith('/transforms/')) {
+        const { pathname } = url;
+        if (pathname === '/render' || pathname === '/transforms' || pathname.startsWith('/transforms/') || pathname.startsWith('/o2h-app/')) {
             const { success } = await env.LIMITER.limit({ key: ip });
             if (!success) return errorResponse(429, 'too many requests: try again in a minute');
         }
@@ -80,8 +88,27 @@ export default {
             return withCors(response);
         }
 
+        const app = APP_PATH.exec(pathname);
+        if (app) {
+            const [, key, path] = app;
+            if (path === undefined) {
+                if (request.method === 'GET') {
+                    const json = await getAppJson(env, key);
+                    if (json === undefined) return errorResponse(404, `no app "${key}"`);
+                    return new Response(json, {
+                        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable', ...CORS },
+                    });
+                }
+                if (request.method !== 'PUT') return errorResponse(405, 'apps are read with GET, and installed with PUT');
+                const refused = await putApp(env, key, await request.text());
+                return refused ? errorResponse(400, refused) : new Response(null, { status: 204, headers: CORS });
+            }
+            if (request.method !== 'GET') return errorResponse(405, "render an app's path with GET");
+            return withCors(await renderAppPath(env, key, path, url.hostname));
+        }
+
         if (url.pathname === '/') {
-            return new Response('o2h-edge: PUT /transforms/<key>, GET /transforms/<key>, GET /transforms (admin), GET /render?api=<url>&transform=<key>\n', {
+            return new Response('o2h-edge: PUT /transforms/<key>, GET /transforms/<key>, GET /transforms (admin), GET /render?api=<url>&transform=<key>, PUT /o2h-app/<key>, GET /o2h-app/<key>[/<path>]\n', {
                 headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS },
             });
         }

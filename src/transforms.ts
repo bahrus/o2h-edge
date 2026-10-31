@@ -102,7 +102,8 @@ export async function getTransformJson(env: Env, key: string): Promise<string | 
 
 /** One page of the list (KV gives up to 1000 keys a page); a cursor for the next, if there is one. */
 export async function listTransforms(env: Env, cursor?: string): Promise<{ transforms: ({ key: string } & Partial<TransformInfo>)[]; cursor: string | null }> {
-    const page = await env.TRANSFORMS.list<TransformInfo>({ cursor: cursor || undefined });
+    // Apps share the namespace (as app-…): only transforms are listed
+    const page = await env.TRANSFORMS.list<TransformInfo>({ prefix: 'o2h-', cursor: cursor || undefined });
     return {
         transforms: page.keys.map(({ name, metadata }) => ({ key: name, ...metadata })),
         cursor: page.list_complete ? null : page.cursor,

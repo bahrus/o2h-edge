@@ -6,6 +6,7 @@ import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { prepareO2HTransform } from 'o2h/worker/client.js';
+import { prepareApp } from 'navigate-gingerly/app.js';
 
 // Fresh local state each run: the KV transforms, and the rate limiter's count (the last test uses up its minute)
 const STATE = '.wrangler/test-state';
@@ -18,10 +19,27 @@ const EDGE = `http://localhost:${EDGE_PORT}`;
 
 // ── The stand-in API ──
 let lastHeaders = {};
+const shopUrls = [];
+const products = [
+    { id: 1, title: 'Tote <bag>', category: 'bags', price: 9.5 },
+    { id: 2, title: 'Sun hat', category: 'hats', price: 12 },
+];
 const mission = { name: 'Demo Mission 7', rocket: { name: 'Falcon 9', type: 'rocket' }, note: 'Fuel </script> & <b>loading</b>' };
 const api = http.createServer((req, res) => {
     lastHeaders = req.headers;
     const json = body => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+    // A small shop, for apps: /shop/products, /shop/products/categories, /shop/products/category/<name>, /shop/products/<id>
+    if (req.url.startsWith('/shop/')) {
+        shopUrls.push(req.url);
+        const path = req.url.slice('/shop'.length);
+        if (path === '/products') return json(products);
+        if (path === '/products/categories') return json(['bags', 'hats']);
+        const category = /^\/products\/category\/([^/?]+)$/.exec(path)?.[1];
+        if (category) return json(products.filter(p => p.category === decodeURIComponent(category)));
+        const product = products.find(p => path === `/products/${p.id}`);
+        if (product) return json(product);
+        res.writeHead(404); return res.end();
+    }
     if (req.url.startsWith('/mission')) return json(mission);
     if (req.url === '/page') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<p>not JSON</p>'); }
     if (req.url === '/big') return json({ data: 'x'.repeat(5000) });
@@ -192,6 +210,96 @@ test('guards: bad requests', async () => {
     assert.equal(preflight.status, 204);
     assert.match(preflight.headers.get('Access-Control-Allow-Methods'), /PUT/);
     assert.match(preflight.headers.get('Access-Control-Allow-Headers'), /Authorization/);
+});
+
+// ── Apps (navigate-gingerly) ──
+// Configs in notation, as an app's JSON holds them: counts for the nav (layout) and the grid, and one product
+const shopApp = (extra = {}) => ({
+    api: `${API}/shop`,
+    layout: { categories: '/products/categories' },
+    routes: [
+        { pattern: '/', sources: { data: '/products' }, config: { map: { categories: ['ul', '?.length'], data: ['p', '?.length'] } }, title: 'Shop' },
+        { pattern: '/products/category/:name', config: { map: { route: ['h2', '?.name'], data: ['p', '?.length'] } }, title: '?.route?.name' },
+        { pattern: '/products/:id', layout: false, config: { map: { data: ['article', {}, [['h2', '?.title'], ['p', '?.price']]] } }, title: '?.data?.title' },
+    ],
+    ...extra,
+});
+const installApp = (key, app) => fetch(`${EDGE}/o2h-app/${key}`, { method: 'PUT', body: JSON.stringify(app) });
+const embeddedOf = html => JSON.parse(html.slice(html.indexOf('data-tree="tree">') + 'data-tree="tree">'.length, html.lastIndexOf('</script>')));
+
+test('apps: installed under the hash of their content, checked, and read back as stored', async () => {
+    const { key, app } = await prepareApp(shopApp(), prepareO2HTransform);
+    assert.equal((await installApp(key, app)).status, 204);
+    assert.equal((await installApp(key, app)).status, 204, 'installing the same app again is harmless');
+    const changed = await installApp(key, { ...app, api: `${API}/elsewhere` });
+    assert.equal(changed.status, 400);
+    assert.match((await changed.json()).error, /doesn't match/);
+    assert.equal((await installApp('not-a-key', app)).status, 400);
+    // validateApp runs on the worker too
+    const bad = await installApp(key, { ...app, routes: [{ pattern: '/p/:id', sources: { p: '/p/{pid}' }, transform: app.routes[0].transform }] });
+    assert.match((await bad.json()).error, /isn't one of its parameters/);
+    const noTransform = await installApp(key, { ...app, routes: [{ pattern: '/', transform: 'o2h-nope' }] });
+    assert.match((await noTransform.json()).error, /which the app doesn't have/);
+
+    const res = await fetch(`${EDGE}/o2h-app/${key}`);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), JSON.stringify(app));
+    // Apps share KV with transforms, but aren't listed as transforms
+    const { transforms } = await (await fetch(`${EDGE}/transforms`)).json();
+    assert.ok(!transforms.some(t => t.key.startsWith('app-')));
+});
+
+test('apps: an aligned path renders the API\'s path, with the VM ({ route, ...sources }) embedded', async () => {
+    const { key, app } = await prepareApp(shopApp(), prepareO2HTransform);
+    await installApp(key, app);
+    shopUrls.length = 0;
+    const res = await fetch(`${EDGE}/o2h-app/${key}/products/1?secret=x`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('Content-Type'), 'text/html; charset=utf-8');
+    assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
+    const html = await res.text();
+    assert.ok(html.startsWith('<!--?start name="tree"--><article><h2>Tote &lt;bag&gt;</h2><p>9.5</p></article>'), html);
+    assert.deepEqual(embeddedOf(html), { data: products[0], route: { id: '1' } });
+    assert.deepEqual(shopUrls, ['/shop/products/1'], 'layout: false, and the visitor\'s query string isn\'t passed on');
+});
+
+test('apps: layout and mapped sources, fetched together, and route parameters in the VM', async () => {
+    const { key, app } = await prepareApp(shopApp(), prepareO2HTransform);
+    await installApp(key, app);
+    shopUrls.length = 0;
+    const home = await (await fetch(`${EDGE}/o2h-app/${key}/`)).text();
+    assert.ok(home.includes('<ul>2</ul><p>2</p>'), home);
+    assert.deepEqual(shopUrls.sort(), ['/shop/products', '/shop/products/categories']);
+
+    const hats = await (await fetch(`${EDGE}/o2h-app/${key}/products/category/hats`)).text();
+    assert.ok(hats.includes('<h2>hats</h2><p>1</p>'), hats);
+    assert.deepEqual(embeddedOf(hats).route, { name: 'hats' });
+});
+
+test('apps: what the worker can\'t render is left to the page (pending)', async () => {
+    const app = shopApp({ options: { pipes: { upper: s => s.toUpperCase() } } });
+    app.routes[2].config = { map: { data: ['article', {}, [['h2', '?.title?.upper']]] } };
+    const { key, app: installed, lost } = await prepareApp(app, prepareO2HTransform);
+    assert.ok(Object.keys(lost).length > 0);
+    await installApp(key, installed);
+    const html = await (await fetch(`${EDGE}/o2h-app/${key}/products/2`)).text();
+    assert.ok(html.includes('<h2 data-pending></h2>'), html);
+});
+
+test('apps: no app, no route, a failing source, and wrong methods', async () => {
+    const { key, app } = await prepareApp(shopApp(), prepareO2HTransform);
+    await installApp(key, app);
+    const missing = await fetch(`${EDGE}/o2h-app/app-00000000000000000000000000000000/products/1`);
+    assert.equal(missing.status, 404);
+    assert.match((await missing.json()).error, /^no app/, 'the page re-installs on this');
+    const noRoute = await fetch(`${EDGE}/o2h-app/${key}/carts/1`);
+    assert.equal(noRoute.status, 404);
+    assert.match((await noRoute.json()).error, /no route/);
+    const failing = await fetch(`${EDGE}/o2h-app/${key}/products/99`);
+    assert.equal(failing.status, 404);
+    assert.match((await failing.json()).error, /the source "data"/);
+    assert.equal((await fetch(`${EDGE}/o2h-app/${key}/products/1`, { method: 'PUT', body: '{}' })).status, 405);
+    assert.equal((await fetch(`${EDGE}/o2h-app/${key}`, { method: 'DELETE' })).status, 405);
 });
 
 test('guards: the per-IP rate limit (60 a minute)', async () => {

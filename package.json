@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "assign-gingerly": "file:../assign-gingerly",
+    "navigate-gingerly": "file:../navigate-gingerly",
     "o2h": "file:../o2h"
   }
 }
