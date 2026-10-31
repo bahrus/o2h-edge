@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The app's base: mirror reads it, and the app's relative links resolve against it -->
+    <base href="/demo/store/">
     <title>Fake Store via o2h-edge</title>
     <!-- #include virtual="/imports.html" -->
     <style>
@@ -21,16 +23,16 @@
         h1 a { color: inherit; text-decoration: none; }
         label { display: flex; gap: 6px; align-items: center; font-size: .85rem; color: var(--muted); }
         input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; width: 14em; max-width: 100%; }
-
-        /* Categories: the worker renders the links; this page marks the current one */
-        #categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-        #categories a { padding: 4px 12px; border-radius: 999px; background: var(--chip); color: var(--text); text-decoration: none; text-transform: capitalize; font-size: .9rem; }
-        #categories a[aria-current] { background: var(--accent); color: #fff; }
-        #status { font-size: .85rem; color: var(--muted); min-height: 1.5em; margin: 0 0 8px; }
+        #status { font-size: .85rem; color: var(--muted); min-height: 1.5em; max-width: 1200px; margin: 0 auto; padding: 0 16px; }
         #status .warn { color: var(--warn); }
 
+        /* Categories: rendered by the worker on every page; mirror marks the current one (aria-current) */
+        .categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+        .categories a { padding: 4px 12px; border-radius: 999px; background: var(--chip); color: var(--text); text-decoration: none; text-transform: capitalize; font-size: .9rem; }
+        .categories a[aria-current] { background: var(--accent); color: #fff; }
+
         /* The grid */
-        #products { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+        .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
         .product { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; color: inherit; text-decoration: none; }
         .product:hover { border-color: var(--accent); }
         .product .photo { position: relative; aspect-ratio: 1; background: #fff; }
@@ -54,166 +56,60 @@
         meter.stars::-moz-meter-bar { background: var(--star); }
 
         /* One product */
-        #product article { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 32px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
-        #product img { width: 100%; max-height: 420px; object-fit: contain; background: #fff; padding: 16px; border-radius: 8px; }
-        #product .info { display: grid; gap: 8px; }
-        #product h2 { margin: 0; font-size: 1.4rem; line-height: 1.3; }
-        #product .category { font-size: .9rem; }
-        #product .price { font-size: 1.4rem; }
-        #product .rating { font-size: .9rem; }
-        #product .description { margin: 8px 0 0; }
-        .back { display: inline-block; margin-bottom: 12px; color: var(--accent); }
-        [hidden] { display: none !important; }
+        .detail { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 32px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+        .detail img { width: 100%; max-height: 420px; object-fit: contain; background: #fff; padding: 16px; border-radius: 8px; }
+        .detail .info { display: grid; gap: 8px; }
+        .detail h2 { margin: 0; font-size: 1.4rem; line-height: 1.3; }
+        .detail .category { font-size: .9rem; }
+        .detail .price { font-size: 1.4rem; }
+        .detail .rating { font-size: .9rem; }
+        .detail .description { margin: 8px 0 0; }
 
         footer { color: var(--muted); font-size: .8rem; }
         @media (max-width: 640px) {
-            #product article { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
-            #products { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+            .detail { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
+            .products { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
         }
     </style>
 </head>
 <body>
     <header>
-        <h1><a href="#">Fake Store</a></h1>
+        <h1><a href="./">Fake Store</a></h1>
         <label>Worker <input type="url" id="worker" value="http://localhost:8787"></label>
     </header>
-    <main>
-        <nav id="categories" aria-label="Categories"></nav>
-        <p id="status"></p>
-        <section id="products" aria-live="polite"></section>
-        <div id="detail" hidden>
-            <a class="back" href="#">← All products</a>
-            <div id="product"></div>
-        </div>
-    </main>
+    <p id="status" aria-live="polite">Loading…</p>
+    <main></main>
     <footer>
-        <p>The <a href="https://fakestoreapi.com/docs">Fake Store API</a>, rendered as HTML by <strong>o2h-edge</strong>. One page:
-            the categories, the product grid and a product are three transforms, rendered by the worker and hydrated here.
-            Links change the hash (<code>#category/…</code>, <code>#product/3</code>), and the page renders what it names.</p>
+        <p>The <a href="https://fakestoreapi.com/docs">Fake Store API</a>, rendered as HTML by <strong>o2h-edge</strong>,
+            routed by <strong>navigate-gingerly</strong>. This page's paths are the API's paths (<code>products/3</code>,
+            <code>products/category/jewelery</code>): each is mirrored to the worker, which fetches the route's sources
+            and renders them as one fragment, hydrated here. Links are intercepted with the Navigation API.</p>
     </footer>
 
     <script type="module">
-        import { tree } from 'assign-gingerly/DX/tree.js';
-        import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
-        import { renderViaEdge } from 'o2h/worker/edge.js';
-
-        const API = 'https://fakestoreapi.com';
-
-        // Data pipes only, so the worker renders everything
-        const pipes = dataPipes({
-            usd: { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } },
-        });
-
-        // A rating ({ rate, count }) at a path: five stars, and the numbers
-        const stars = at => tree`
-            <p class="rating">
-                <meter class="stars" min="0" max="5" value=${`${at}?.rate`}></meter>
-                <span>${`${at}?.rate`} (${`${at}?.count`})</span>
-            </p>`;
-
-        const views = {
-            // ["electronics", "jewelery", …]
-            categories: {
-                container: document.getElementById('categories'),
-                api: () => `${API}/products/categories`,
-                config: { map: { '*': tree`<a href="#category/${'?.'}">${'?.'}</a>` } },
-            },
-            // [{ id, title, price, description, category, image, rating: { rate, count } }, …]
-            products: {
-                container: document.getElementById('products'),
-                api: category => category ? `${API}/products/category/${encodeURIComponent(category)}` : `${API}/products`,
-                config: {
-                    map: {
-                        '*': tree`
-                            <a class="product" href="#product/${'?.id'}">
-                                <div class="photo"><img src=${'?.image'} alt="" loading="lazy"></div>
-                                <div class="body">
-                                    <p class="category">${'?.category'}</p>
-                                    <h2>${'?.title'}</h2>
-                                    <p class="price">${'?.price?.usd'}</p>
-                                    ${stars('?.rating')}
-                                </div>
-                            </a>`,
-                    },
-                },
-            },
-            // { id, title, price, description, category, image, rating }: one element for the whole product ('?.')
-            product: {
-                container: document.getElementById('product'),
-                api: id => `${API}/products/${encodeURIComponent(id)}`,
-                config: {
-                    map: {
-                        '?.': tree`
-                            <article>
-                                <img src=${'?.image'} alt=${'?.title'}>
-                                <div class="info">
-                                    <h2>${'?.title'}</h2>
-                                    <p class="category">${'?.category'}</p>
-                                    <p class="price">${'?.price?.usd'}</p>
-                                    ${stars('?.rating')}
-                                    <p class="description">${'?.description'}</p>
-                                </div>
-                            </article>`,
-                    },
-                },
-            },
-        };
+        import { mirror } from 'navigate-gingerly/mirror.js';
+        import { o2hRenderer } from 'o2h/worker/edge.js';
+        import { app } from './app.js';
 
         const status = document.getElementById('status');
         const workerInput = document.getElementById('worker');
         const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-        const options = { pipes, style: true };
 
-        /** Render a view through the worker into its container (hydrated there). */
-        async function render(view, arg) {
-            return renderViaEdge(view.container, { worker: workerInput.value, api: view.api(arg), config: view.config, options });
-        }
-
-        // Which view the hash names: #product/3, #category/electronics, or everything
-        function route() {
-            const [kind, ...rest] = location.hash.slice(1).split('/');
-            const value = decodeURIComponent(rest.join('/'));
-            if (kind === 'product' && value) return { kind: 'product', value };
-            if (kind === 'category' && value) return { kind: 'category', value };
-            return { kind: 'all' };
-        }
-
-        // The current category's link (a comparison, which the worker can't make, so it's done here)
-        function markCategory(category) {
-            for (const a of views.categories.container.querySelectorAll('a')) {
-                if (a.getAttribute('href') === `#category/${category}`) a.setAttribute('aria-current', 'page');
-                else a.removeAttribute('aria-current');
-            }
-        }
-
-        let categoriesShown;
-        async function show() {
-            const { kind, value } = route();
-            status.textContent = 'Loading…';
-            try {
-                categoriesShown ??= render(views.categories);
-                await categoriesShown;
-                markCategory(kind === 'category' ? value : undefined);
-                const detail = kind === 'product';
-                document.getElementById('detail').hidden = !detail;
-                views.products.container.hidden = detail;
-                const { by, error, elapsed, pending, data } = detail ? await render(views.product, value) : await render(views.products, kind === 'category' ? value : undefined);
-                const what = detail ? escape(data.title) : `${data.length} products${kind === 'category' ? ` in ${escape(value)}` : ''}`;
+        const store = mirror({
+            worker: () => workerInput.value,
+            app,
+            into: document.querySelector('main'),
+            renderer: o2hRenderer(),
+            onRender({ path, by, elapsed, pending, error }) {
                 status.innerHTML = by === 'worker'
-                    ? `${what}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
-                    : `${what}, <span class="warn">rendered on this page: the worker said "${escape(error ?? 'nothing')}".</span>`;
-                if (detail) document.title = `${data.title} · Fake Store`; else document.title = 'Fake Store via o2h-edge';
-            } catch (e) {
-                categoriesShown = undefined;
-                status.innerHTML = `<span class="warn">${escape(e.message)}. Is the worker running (<code>npm run dev</code>)?</span>`;
-            } finally {
+                    ? `${escape(path)}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
+                    : by === 'page'
+                        ? `${escape(path)}, <span class="warn">rendered on this page: the worker said "${escape(error ?? 'nothing')}".</span>`
+                        : `<span class="warn">${escape(error)}. Is the worker running (<code>npm run dev</code>)?</span>`;
                 document.body.dataset.ready = 'true';
-            }
-        }
-
-        addEventListener('hashchange', show);
-        workerInput.addEventListener('change', () => { categoriesShown = undefined; show(); });
-        show();
+            },
+        });
+        workerInput.addEventListener('change', () => store.refresh());
     </script>
 </body>
 </html>

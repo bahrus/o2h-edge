@@ -78,7 +78,12 @@ The page stores its transform (a tree config and pipes), then asks the worker to
 
 ## Demo: a store
 
-[`demo/store/index.html`](demo/store/index.html) is a one-page store over the [Fake Store API](https://fakestoreapi.com/docs): category links, a product grid (photo, price, star rating) and a product view. They're three transforms, all rendered by the worker, since only data pipes are used. Links change the hash (`#category/jewelery`, `#product/3`), and the page renders what it names. Serve it like the APOD demo, and open `/demo/store/index.html` (with the file name: spa-ssi serves its site map for a bare directory).
+A store over the [Fake Store API](https://fakestoreapi.com/docs), as a [navigate-gingerly](https://github.com/bahrus/navigate-gingerly) app: category links, a product grid (photo, price, star rating) and a product view.
+
+- **[`demo/store/app.js`](demo/store/app.js)** is the app: its paths are the API's paths (`products/3`, `products/category/jewelery`), plus the base itself (all products). The category nav is a layout source, fetched with every route.
+- **[`demo/store/index.html`](demo/store/index.html)** is the shell: a `<base href="/demo/store/">`, and one `mirror` call. Each path is mirrored to the worker (`/o2h-app/<key>/products/3`), which fetches the route's sources in parallel and renders them as one fragment. Everything is rendered by the worker, since only data pipes are used. Links are intercepted with the Navigation API.
+
+Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading `/demo/store/products/3`) need the server to answer with the shell. spa-ssi's fallback serves the site root's `index.html`, not the store's, so for now a reload there shows the site map. Start from `/demo/store/`.
 
 ## Demo: the stored transforms
 

@@ -1,0 +1,70 @@
+// The store, as a navigate-gingerly app: routes whose paths are the Fake Store API's paths, rendered by o2h-edge.
+// Plain data once built (JSON.stringify(app) is its JSON form): tree`…` only writes the configs' notation.
+import { tree, each } from 'assign-gingerly/DX/tree.js';
+
+// A rating ({ rate, count }) at a path: five stars, and the numbers
+const stars = at => tree`
+    <p class="rating">
+        <meter class="stars" min="0" max="5" value=${`${at}?.rate`}></meter>
+        <span>${`${at}?.rate`} (${`${at}?.count`})</span>
+    </p>`;
+
+// ["electronics", "jewelery", …]: links relative to the shell's <base href>, so the app works under any base
+const categories = tree`
+    <nav class="categories" aria-label="Categories" ${each('?.')}><a href="products/category/${'?.'}">${'?.'}</a></nav>`;
+
+// [{ id, title, price, description, category, image, rating: { rate, count } }, …]
+const grid = {
+    map: {
+        categories,
+        data: tree`
+            <section class="products" ${each('?.')}>
+                <a class="product" href="products/${'?.id'}">
+                    <div class="photo"><img src=${'?.image'} alt="" loading="lazy"></div>
+                    <div class="body">
+                        <p class="category">${'?.category'}</p>
+                        <h2>${'?.title'}</h2>
+                        <p class="price">${'?.price?.usd'}</p>
+                        ${stars('?.rating')}
+                    </div>
+                </a>
+            </section>`,
+    },
+};
+
+// { id, title, price, description, category, image, rating }
+const product = {
+    map: {
+        categories,
+        data: tree`
+            <article class="detail">
+                <img src=${'?.image'} alt=${'?.title'}>
+                <div class="info">
+                    <h2>${'?.title'}</h2>
+                    <p class="category">${'?.category'}</p>
+                    <p class="price">${'?.price?.usd'}</p>
+                    ${stars('?.rating')}
+                    <p class="description">${'?.description'}</p>
+                </div>
+            </article>`,
+    },
+};
+
+export const app = {
+    api: 'https://fakestoreapi.com',
+    // The category nav, on every page
+    layout: { categories: '/products/categories' },
+    routes: [
+        // The base itself: all products (mapped, since the API has nothing at its root)
+        { pattern: '/', sources: { data: '/products' }, config: grid, title: 'Fake Store' },
+        // Aligned: the path is the API's path
+        { pattern: '/products', config: grid, title: 'Fake Store' },
+        { pattern: '/products/category/:name', config: grid, title: '?.route?.name' },
+        { pattern: '/products/:id', config: product, title: '?.data?.title' },
+    ],
+    options: {
+        // Data pipes, as descriptors, so the worker renders everything
+        pipes: { usd: { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } } },
+        style: true,
+    },
+};
