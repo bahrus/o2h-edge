@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tree, each } from 'assign-gingerly/DX/tree.js';
 
-/** @import {NavigateApp} from 'navigate-gingerly' */
+/** @import {O2HApp} from 'o2h' */
 
 // A rating ({ rate, count }) at a path: five stars, and the numbers
 const stars = (/** @type {string} */ at) => tree`
@@ -56,7 +56,7 @@ const product = {
     },
 };
 
-/** @type {NavigateApp} */
+/** @type {O2HApp} */
 export const app = {
     api: 'https://fakestoreapi.com',
     // The category nav, on every page
