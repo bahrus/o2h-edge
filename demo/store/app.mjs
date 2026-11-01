@@ -1,9 +1,15 @@
+//@ts-check
 // The store, as a navigate-gingerly app: routes whose paths are the Fake Store API's paths, rendered by o2h-edge.
-// Plain data once built (JSON.stringify(app) is its JSON form): tree`…` only writes the configs' notation.
+// Built to app.json (`npm run build-store`, or `npm run watch-store`), which the shell imports: tree`…` only writes
+// the configs' notation, so the app is plain data. Code (a pipe, a manager) goes in as { import, export } references.
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tree, each } from 'assign-gingerly/DX/tree.js';
 
+/** @import {NavigateApp} from 'navigate-gingerly' */
+
 // A rating ({ rate, count }) at a path: five stars, and the numbers
-const stars = at => tree`
+const stars = (/** @type {string} */ at) => tree`
     <p class="rating">
         <meter class="stars" min="0" max="5" value=${`${at}?.rate`}></meter>
         <span>${`${at}?.rate`} (${`${at}?.count`})</span>
@@ -50,6 +56,7 @@ const product = {
     },
 };
 
+/** @type {NavigateApp} */
 export const app = {
     api: 'https://fakestoreapi.com',
     // The category nav, on every page
@@ -68,3 +75,16 @@ export const app = {
         style: true,
     },
 };
+
+/** The app as JSON. Throws for code, which JSON would silently drop: reference it as { import, export } instead. */
+export function render() {
+    return JSON.stringify(app, (key, value) => {
+        if (typeof value === 'function' || typeof value === 'symbol') {
+            throw new Error(`app.mjs: "${key}" is code, which JSON can't hold; use { import: './module.js', export: '${key}' }`);
+        }
+        return value;
+    }, 4);
+}
+
+// Run directly (not imported, as spa-ssi does to call render()): write app.json beside this file
+if (import.meta.main) writeFileSync(fileURLToPath(new URL('app.json', import.meta.url)), render(), 'utf8');

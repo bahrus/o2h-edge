@@ -1,0 +1,515 @@
+{
+    "api": "https://fakestoreapi.com",
+    "layout": {
+        "categories": "/products/categories"
+    },
+    "routes": [
+        {
+            "pattern": "/",
+            "sources": {
+                "data": "/products"
+            },
+            "config": {
+                "map": {
+                    "categories": [
+                        "nav",
+                        {
+                            "class :=": "categories",
+                            "aria-label :=": "Categories"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "href :=": {
+                                        "join": [
+                                            "products/category/",
+                                            "?."
+                                        ]
+                                    },
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "data": [
+                        "section",
+                        {
+                            "class :=": "products"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "class :=": "product",
+                                    "href :=": {
+                                        "join": [
+                                            "products/",
+                                            "?.id"
+                                        ]
+                                    }
+                                },
+                                [
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "photo"
+                                        },
+                                        [
+                                            [
+                                                "img",
+                                                {
+                                                    "src :=": "?.image",
+                                                    "alt :=": "",
+                                                    "loading :=": "lazy"
+                                                }
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "body"
+                                        },
+                                        [
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "category",
+                                                    "textContent": "?.category"
+                                                }
+                                            ],
+                                            [
+                                                "h2",
+                                                {
+                                                    "textContent": "?.title"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "price",
+                                                    "textContent": "?.price?.usd"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "rating"
+                                                },
+                                                [
+                                                    [
+                                                        "meter",
+                                                        {
+                                                            "class :=": "stars",
+                                                            "min :=": "0",
+                                                            "max :=": "5",
+                                                            "value :=": "?.rating?.rate"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "span",
+                                                        {
+                                                            "?. =&": {
+                                                                "microJoin": [
+                                                                    "?.rating?.rate",
+                                                                    " (",
+                                                                    "?.rating?.count",
+                                                                    ")"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "of": "?."
+                        }
+                    ]
+                }
+            },
+            "title": "Fake Store"
+        },
+        {
+            "pattern": "/products",
+            "config": {
+                "map": {
+                    "categories": [
+                        "nav",
+                        {
+                            "class :=": "categories",
+                            "aria-label :=": "Categories"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "href :=": {
+                                        "join": [
+                                            "products/category/",
+                                            "?."
+                                        ]
+                                    },
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "data": [
+                        "section",
+                        {
+                            "class :=": "products"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "class :=": "product",
+                                    "href :=": {
+                                        "join": [
+                                            "products/",
+                                            "?.id"
+                                        ]
+                                    }
+                                },
+                                [
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "photo"
+                                        },
+                                        [
+                                            [
+                                                "img",
+                                                {
+                                                    "src :=": "?.image",
+                                                    "alt :=": "",
+                                                    "loading :=": "lazy"
+                                                }
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "body"
+                                        },
+                                        [
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "category",
+                                                    "textContent": "?.category"
+                                                }
+                                            ],
+                                            [
+                                                "h2",
+                                                {
+                                                    "textContent": "?.title"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "price",
+                                                    "textContent": "?.price?.usd"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "rating"
+                                                },
+                                                [
+                                                    [
+                                                        "meter",
+                                                        {
+                                                            "class :=": "stars",
+                                                            "min :=": "0",
+                                                            "max :=": "5",
+                                                            "value :=": "?.rating?.rate"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "span",
+                                                        {
+                                                            "?. =&": {
+                                                                "microJoin": [
+                                                                    "?.rating?.rate",
+                                                                    " (",
+                                                                    "?.rating?.count",
+                                                                    ")"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "of": "?."
+                        }
+                    ]
+                }
+            },
+            "title": "Fake Store"
+        },
+        {
+            "pattern": "/products/category/:name",
+            "config": {
+                "map": {
+                    "categories": [
+                        "nav",
+                        {
+                            "class :=": "categories",
+                            "aria-label :=": "Categories"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "href :=": {
+                                        "join": [
+                                            "products/category/",
+                                            "?."
+                                        ]
+                                    },
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "data": [
+                        "section",
+                        {
+                            "class :=": "products"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "class :=": "product",
+                                    "href :=": {
+                                        "join": [
+                                            "products/",
+                                            "?.id"
+                                        ]
+                                    }
+                                },
+                                [
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "photo"
+                                        },
+                                        [
+                                            [
+                                                "img",
+                                                {
+                                                    "src :=": "?.image",
+                                                    "alt :=": "",
+                                                    "loading :=": "lazy"
+                                                }
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        "div",
+                                        {
+                                            "class :=": "body"
+                                        },
+                                        [
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "category",
+                                                    "textContent": "?.category"
+                                                }
+                                            ],
+                                            [
+                                                "h2",
+                                                {
+                                                    "textContent": "?.title"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "price",
+                                                    "textContent": "?.price?.usd"
+                                                }
+                                            ],
+                                            [
+                                                "p",
+                                                {
+                                                    "class :=": "rating"
+                                                },
+                                                [
+                                                    [
+                                                        "meter",
+                                                        {
+                                                            "class :=": "stars",
+                                                            "min :=": "0",
+                                                            "max :=": "5",
+                                                            "value :=": "?.rating?.rate"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "span",
+                                                        {
+                                                            "?. =&": {
+                                                                "microJoin": [
+                                                                    "?.rating?.rate",
+                                                                    " (",
+                                                                    "?.rating?.count",
+                                                                    ")"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "of": "?."
+                        }
+                    ]
+                }
+            },
+            "title": "?.route?.name"
+        },
+        {
+            "pattern": "/products/:id",
+            "config": {
+                "map": {
+                    "categories": [
+                        "nav",
+                        {
+                            "class :=": "categories",
+                            "aria-label :=": "Categories"
+                        },
+                        {
+                            "each": [
+                                "a",
+                                {
+                                    "href :=": {
+                                        "join": [
+                                            "products/category/",
+                                            "?."
+                                        ]
+                                    },
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "data": [
+                        "article",
+                        {
+                            "class :=": "detail"
+                        },
+                        [
+                            [
+                                "img",
+                                {
+                                    "src :=": "?.image",
+                                    "alt :=": "?.title"
+                                }
+                            ],
+                            [
+                                "div",
+                                {
+                                    "class :=": "info"
+                                },
+                                [
+                                    [
+                                        "h2",
+                                        {
+                                            "textContent": "?.title"
+                                        }
+                                    ],
+                                    [
+                                        "p",
+                                        {
+                                            "class :=": "category",
+                                            "textContent": "?.category"
+                                        }
+                                    ],
+                                    [
+                                        "p",
+                                        {
+                                            "class :=": "price",
+                                            "textContent": "?.price?.usd"
+                                        }
+                                    ],
+                                    [
+                                        "p",
+                                        {
+                                            "class :=": "rating"
+                                        },
+                                        [
+                                            [
+                                                "meter",
+                                                {
+                                                    "class :=": "stars",
+                                                    "min :=": "0",
+                                                    "max :=": "5",
+                                                    "value :=": "?.rating?.rate"
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "?. =&": {
+                                                        "microJoin": [
+                                                            "?.rating?.rate",
+                                                            " (",
+                                                            "?.rating?.count",
+                                                            ")"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        "p",
+                                        {
+                                            "class :=": "description",
+                                            "textContent": "?.description"
+                                        }
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                }
+            },
+            "title": "?.data?.title"
+        }
+    ],
+    "options": {
+        "pipes": {
+            "usd": {
+                "intl": "NumberFormat",
+                "locale": "en-US",
+                "options": {
+                    "style": "currency",
+                    "currency": "USD"
+                }
+            }
+        },
+        "style": true
+    }
+}

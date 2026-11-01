@@ -89,7 +89,8 @@
     <script type="module">
         import { mirror } from 'navigate-gingerly/mirror.js';
         import { o2hRenderer } from 'o2h/worker/edge.js';
-        import { app } from './app.js';
+        // Built from app.mjs (npm run build-store)
+        import app from './app.json' with { type: 'json' };
 
         const status = document.getElementById('status');
         const workerInput = document.getElementById('worker');

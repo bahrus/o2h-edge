@@ -11,6 +11,8 @@
     "check": "tsc --noEmit -p .",
     "test": "node --test \"test/*.test.*\"",
     "update": "ncu -u && npm install",
+    "build-store": "node demo/store/app.mjs",
+    "watch-store": "node --watch demo/store/app.mjs",
     "serve": "node ./node_modules/spa-ssi/serve.js"
   },
   "license": "MIT",
