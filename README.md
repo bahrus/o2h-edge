@@ -83,7 +83,7 @@ A store over the [Fake Store API](https://fakestoreapi.com/docs), as a [navigate
 - **[`demo/store/app.js`](demo/store/app.js)** is the app: its paths are the API's paths (`products/3`, `products/category/jewelery`), plus the base itself (all products). The category nav is a layout source, fetched with every route.
 - **[`demo/store/index.html`](demo/store/index.html)** is the shell: a `<base href="/demo/store/">`, and one `mirror` call. Each path is mirrored to the worker (`/o2h-app/<key>/products/3`), which fetches the route's sources in parallel and renders them as one fragment. Everything is rendered by the worker, since only data pipes are used. Links are intercepted with the Navigation API.
 
-Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading `/demo/store/products/3`) need the server to answer with the shell. spa-ssi's fallback serves the site root's `index.html`, not the store's, so for now a reload there shows the site map. Start from `/demo/store/`.
+Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading `/demo/store/products/3`) need the server to answer with the shell: spa-ssi does from the version after 0.0.30, which serves the nearest directory's `index.html` for a missing path. With 0.0.30, start from `/demo/store/`.
 
 ## Demo: the stored transforms
 

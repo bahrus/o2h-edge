@@ -15,9 +15,9 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "spa-ssi": "^0.0.30",
+    "spa-ssi": "^0.0.31",
     "typescript": "^7.0.2",
-    "wrangler": "^4.153.0"
+    "wrangler": "^4.156.0"
   },
   "dependencies": {
     "assign-gingerly": "file:../assign-gingerly",
