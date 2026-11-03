@@ -319,3 +319,74 @@ map: {
 - **The CSS grid areas are gone**, along with the `$parent?.title` for the image's `alt`.
 - **The container** is now a plain `<div id="product">`.
 - **Rechecked in Chromium:** the same flow, all rendered by the worker, nothing pending, no horizontal scroll at 375px. The detail layout is tighter, since the info column flows naturally.
+
+## Bruce's Response - Totals
+
+Earlier, you mentioned
+
+> ### What each layer would likely be asked for
+
+> - **Totals:** a cart's total, or the item count on the cart badge. `dataPipes` stops at comparisons, and has no **aggregate** (sum, count, sum of price × quantity). So today a total is a function pipe, which the worker leaves pending. A small `sum` descriptor (`{ sum: '?.quantity' }`, or with a product of two paths) would keep totals in the worker. **This is the first concrete enhancement I'd expect.**
+
+Did you find that this gap still exists?  Did you find a solution for it without introducing any new concepts?  What was it?
+
+If not, can you propose how we might address this, starting with which layer?
+
+## Claude's Response - Totals
+
+**Yes, the gap still exists, and no, I didn't find a way around it. The store never got to it.** Totals were planned for stage 4 (the cart). Once Bruce's Response II pointed us at the client helper, the work went into routes and navigate-gingerly instead. The catalog, categories and product pages never sum anything, so nothing pushed on it. Here's where things stand today:
+
+| Need | Today | Rendered by the worker? |
+|---|---|---|
+| Number of lines in a cart | `?.length` (a path), or `{ use: 'length' }` | Yes |
+| Number of *items* (the badge: 2 shirts + 1 bag = 3) | A function pipe | No |
+| Total price | A function pipe | No |
+
+### What I checked, looking for a way with existing concepts
+
+- **Data pipes** (`intl`, `map`, `use`, `chain`) are deliberately small. The comment in `pipes/dataPipes.ts` says so: "No comparisons, arithmetic, filtering or sorting." None of the built-ins (`length`, `toFixed`, `join`, …) folds an array into a number.
+- **Sync ops** (` =&`) take several inputs, including `$root` / `$parent` paths. But the registry is closed (`join`, `microJoin`), and neither one does arithmetic.
+- **`withMethods`** calls a method with at most one string argument, so `reduce` is out of reach.
+- **A manager** (`options.managers`) could compute a total. But it's code, so in an app it's a module reference, and the worker can't load the page's modules. It would be left pending, just like a function pipe.
+- **The API:** Fake Store's cart lines are `{ productId, quantity }`, with **no price**. So an API cart's total is really two problems:
+  - an **aggregate:** sum of quantity × price;
+  - a **join:** finding the price by `productId` in another source.
+
+### Proposal
+
+**Start in assign-gingerly, with an aggregate data pipe.** This adds no new concepts: it's a fifth descriptor kind, alongside `map` and `use`, and it's still plain JSON. It works everywhere pipes do: the page, the service worker, the edge, and the stored transforms.
+
+```js
+pipes: {
+    // the cart badge: 2 + 1 → 3
+    itemCount: { sum: '?.quantity' },
+    // the total: the sum of quantity × price, per line
+    subtotal: { sum: ['?.quantity', '?.price'] },
+    // as currency: a chain, as today
+    total: { chain: ['subtotal', 'usd'] },
+}
+// '?.lines?.itemCount', '?.lines?.total'
+```
+
+- **Unary, like every pipe:** it takes the array, resolves the path (or paths) against each element, multiplies the paths' values within an element, and adds the results up.
+- **The paths inside** are ordinary `?.` paths, resolved with the same `getValue`, so they're nothing new.
+- **Missing values:** a line whose path leads nowhere counts as 0. If the value isn't an array, the pipe returns `undefined`, so nothing is rendered, like any path that leads nowhere.
+- **Decimals:** prices like `109.95 × 3` pick up floating-point noise. A currency `intl` pipe (`usd`) rounds it when it formats, so no rounding is built into the pipe.
+- I'd leave out averages, min and max until something asks for them. The same descriptor could take `{ sum, …}` siblings later without a new shape.
+
+**Then the join, which I'd keep out of assign-gingerly for now.** I'd split it by where the cart lives:
+
+- **The visitor's cart:** we agreed it lives on the page (`localStorage`). When an item is added, the page can store `{ productId, quantity, title, price }`, keeping the price as it was then, the way real carts do. The lines then carry their prices, and `{ sum: ['?.quantity', '?.price'] }` is all a total needs. **No join.**
+- **Carts from the API** (`/carts/user/:id`, an order history rendered by the worker): these need the join. A route can already fetch both sources, `{ data: '/carts/{id}', products: '/products' }`, so the worker's VM holds everything. The missing piece is a lookup across sources. It's a separate question that needs its own design: a `$root`-aware sync op, or something done at the navigate-gingerly layer before rendering. I'd only take it up if the demo grows an order history.
+
+### Suggested order
+
+1. **The `sum` descriptor**, in assign-gingerly. This touches four places:
+   - `pipes/dataPipes.ts`: the descriptor and its validation;
+   - the types: `SumPipeDescriptor`, added to `PipeDescriptor`, which `O2HAppOptions` gets for free;
+   - `docs/pipes.md`;
+   - tests: unit tests, plus an o2h Node test that renders a total, which shows the worker keeps it.
+2. **A small cart in the store:** add-to-cart and quantity on the page; the badge and the cart's total through `sum`. Hydrated and rendered on the page, since the cart lives there. This is also where the "Events" and "Empty states" items from Claude's Thoughts finally get tried out.
+3. **The join**, only if an order history page is wanted.
+
+Shall I go ahead with 1?
