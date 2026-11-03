@@ -484,6 +484,28 @@
                                         ]
                                     ],
                                     [
+                                        "button",
+                                        {
+                                            "type :=": "button",
+                                            "class :=": "add",
+                                            " +=": {
+                                                "on": "click",
+                                                "get": {
+                                                    "dispatch": {
+                                                        "type": "cart-add",
+                                                        "detail": {
+                                                            "id": "?.id",
+                                                            "title": "?.title",
+                                                            "price": "?.price",
+                                                            "image": "?.image"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "textContent": "Add to cart"
+                                        }
+                                    ],
+                                    [
                                         "p",
                                         {
                                             "class :=": "description",
@@ -508,6 +530,21 @@
                     "style": "currency",
                     "currency": "USD"
                 }
+            },
+            "itemCount": {
+                "sum": "?.quantity"
+            },
+            "subtotal": {
+                "sum": [
+                    "?.quantity",
+                    "?.price"
+                ]
+            },
+            "total": {
+                "chain": [
+                    "subtotal",
+                    "usd"
+                ]
             }
         },
         "style": true

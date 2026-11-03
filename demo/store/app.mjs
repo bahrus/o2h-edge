@@ -38,6 +38,11 @@ const grid = {
     },
 };
 
+// Add to cart: the button dispatches cart-add, with the product as a cart line, for the page's cart (cart.js).
+// Data only: the get block is resolved against the product when hydration binds the button. The worker can't
+// bind events, so it marks the button data-pending, and it's hidden (options.style) until the page binds it.
+const addToCart = { get: { dispatch: { type: 'cart-add', detail: { id: '?.id', title: '?.title', price: '?.price', image: '?.image' } } } };
+
 // { id, title, price, description, category, image, rating }
 const product = {
     map: {
@@ -50,6 +55,7 @@ const product = {
                     <p class="category">${'?.category'}</p>
                     <p class="price">${'?.price?.usd'}</p>
                     ${stars('?.rating')}
+                    <button type="button" class="add" @click=${addToCart}>Add to cart</button>
                     <p class="description">${'?.description'}</p>
                 </div>
             </article>`,
@@ -70,8 +76,14 @@ export const app = {
         { pattern: '/products/:id', config: product, title: '?.data?.title' },
     ],
     options: {
-        // Data pipes, as descriptors, so the worker renders everything
-        pipes: { usd: { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } } },
+        // Data pipes, as descriptors, so the worker renders everything. The cart (cart.js) uses them too.
+        pipes: {
+            usd: { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } },
+            // A cart's lines ([{ quantity, price, … }]): the badge's count, and the total
+            itemCount: { sum: '?.quantity' },
+            subtotal: { sum: ['?.quantity', '?.price'] },
+            total: { chain: ['subtotal', 'usd'] },
+        },
         style: true,
     },
 };

@@ -455,3 +455,74 @@ const pipes = dataPipes({
 So the order is: publish assign-gingerly, then bump it in o2h (`npm run update`).
 
 Nothing is committed. Next, per the plan, is stage 2: a small cart in the store, with the badge and total through `sum`.
+
+## Bruce's Response VIII
+
+I published and installed a new version of assign-gingerly.
+
+Please proceed to stage 2.
+
+## Claude's Implementation Notes VIII: stage 2, the cart
+
+**What there is now:**
+- **"Add to cart"** on the product view.
+- **A Cart button with a badge** in the header. It opens the cart as a side panel, a popover, with:
+  - each line's photo, title (a link back to the product), price, and −/+ buttons;
+  - the total.
+- **"Your cart is empty."** when there's nothing in it.
+- **Persistence:** the cart is kept in `localStorage`, so it survives reloads and deep links. Other tabs follow along, through the `storage` event.
+
+### How it uses what exists (nothing new in the libraries)
+
+- **Events as data:** the Add button is worker-rendered, so its binding has to survive as JSON, and `call` needs a method on the host, which a JSON VM doesn't have. A binding's `get` block, though, is resolved against the element's data **when the listener is attached**, and that includes a `dispatch`'s `detail`. So in [app.mjs](../../demo/store/app.mjs):
+
+  ```js
+  const addToCart = { get: { dispatch: { type: 'cart-add', detail: { id: '?.id', title: '?.title', price: '?.price', image: '?.image' } } } };
+  // … <button type="button" class="add" @click=${addToCart}>Add to cart</button>
+  ```
+
+  The worker can't bind it, so it renders the button `data-pending`, and `style: true` hides it until the page's hydration binds it (`adopt: 'pending'`). The status line confirms that: "1 parts finished here". The event bubbles up to the page, where [cart.js](../../demo/store/cart.js) adds the line. The −/+ buttons do the same with `cart-change` and `{ id: '?.id', by: ±1 }`.
+- **Totals:** `itemCount: { sum: '?.quantity' }`, `subtotal: { sum: ['?.quantity', '?.price'] }` and `total: { chain: ['subtotal', 'usd'] }` are in the app's `options.pipes`. So they're type-checked and stored with the transforms, ready for an order history page rendered by the worker. The cart uses them on the page through `dataPipes(app.options.pipes)`.
+- **No join,** as planned: a line keeps the price it had when it was added, `{ id, title, price, image, quantity }`.
+- **The empty state** is `each('?.', { key: '?.id', empty: tree`…` })`. No switch was needed.
+- **Rebinding in place:** each change re-applies the same tree with the new lines. Because `each` is keyed by `?.id`, lines are rebound rather than rebuilt, so **focus stays on the −/+ button** that was pressed. That matters for keyboard use.
+- **The panel is a native popover:**
+  - `popovertarget` on the badge opens it, and a Close button uses `popovertargetaction="hide"`;
+  - light dismiss and Esc close it, and focus returns to the badge;
+  - no script is needed to open or close it, except closing it when a link inside it is followed: the shell's `onRender` calls `hidePopover()`.
+- **Announcements:** the status line is `aria-live`, so each change is announced, e.g. "Mens Cotton Jacket: 1 in your cart."
+
+**The cart itself is page code** ([cart.js](../../demo/store/cart.js), about 90 lines): its tree config, plus the `cart-add` / `cart-change` / `storage` listeners. The worker never sees the cart, so I didn't make it JSON. If you'd like its config built and type-checked like app.mjs, it could move into a `cart.mjs` → `cart.json`.
+
+### Checked
+
+The check ran against my own `wrangler dev` and spa-ssi, in Chromium, Firefox and WebKit:
+- **Deep link to `/demo/store/products/2`:**
+  - The Add button is bound, and nothing is left `data-pending`.
+  - Two clicks make the badge 2.
+- **Reload on product 3:** the badge is still 2. Adding one makes it 3, and the panel shows 2 lines and a total of **$100.59** (2 × $22.30 + $55.99).
+- **"One less" by keyboard:** the badge goes to 2 and the total to $78.29, and focus stays on the button.
+- **Emptying it:** the badge is 0, "Your cart is empty.", and the total is $0.00.
+- **At 375px (Chromium):**
+  - no horizontal scroll;
+  - the panel takes the full width;
+  - a link inside it navigates (intercepted) and closes the panel.
+- **Close and Esc** both close the panel, and Esc returns focus to the badge (Chromium, WebKit).
+
+**About ports:** your own `wrangler dev`, from 11/1, is listening on 8787, which the store's Worker field defaults to. My first run reached it by mistake. I left it running. The checks run their own worker on 8788 and redirect the page's calls to it. Since yours was started before `sum` existed, **restart it** before trying the cart. Otherwise the stored app may not revive there.
+
+**Changed:**
+- **app.mjs:**
+  - the Add button and its `addToCart` binding;
+  - three pipes (`itemCount`, `subtotal`, `total`);
+- **app.json:** rebuilt from app.mjs;
+- **cart.js:** new;
+- **index.html:**
+  - the cart's slot in the header, and its styles;
+  - starting the cart, with the status announcements;
+  - closing the panel on navigation;
+- **README:** the store section now describes the cart.
+
+Nothing is committed.
+
+**Next, from the plan:** caching catalog GETs (stage 5). Or the join, if you'd like an order history page.

@@ -65,6 +65,31 @@
         .detail .rating { font-size: .9rem; }
         .detail .description { margin: 8px 0 0; }
 
+        /* Add to cart: worker-rendered, data-pending (so hidden) until the page binds its click */
+        .add { justify-self: start; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
+
+        /* The cart: rendered on this page (cart.js), from localStorage */
+        .header-end { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+        .cart-button { font: inherit; color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+        .badge { min-width: 1.6em; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: .8rem; font-weight: 700; text-align: center; }
+        .cart-panel { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(420px, 100vw); height: 100%; max-height: none; border: 0; border-left: 1px solid var(--line); padding: 16px; background: var(--panel); color: var(--text); overflow: auto; }
+        .cart-panel::backdrop { background: rgb(0 0 0 / .35); }
+        .cart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .cart-panel h2 { margin: 0; font-size: 1.2rem; }
+        .close { font: inherit; font-size: .85rem; color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+        .lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+        .line { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+        .line img { width: 56px; height: 56px; object-fit: contain; background: #fff; border-radius: 6px; padding: 4px; }
+        .line .what { display: grid; gap: 2px; min-width: 0; }
+        .line a { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .line a:hover { text-decoration: underline; }
+        .line .price { font-size: .85rem; color: var(--muted); }
+        .quantity { display: flex; align-items: center; gap: 6px; }
+        .quantity button { width: 28px; height: 28px; font: inherit; color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+        .quantity output { min-width: 1.5em; text-align: center; }
+        .empty { color: var(--muted); }
+        .total { display: flex; justify-content: space-between; margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 1.1rem; }
+
         footer { color: var(--muted); font-size: .8rem; }
         @media (max-width: 640px) {
             .detail { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
@@ -75,7 +100,11 @@
 <body>
     <header>
         <h1><a href="./">Fake Store</a></h1>
-        <label>Worker <input type="url" id="worker" value="http://localhost:8787"></label>
+        <div class="header-end">
+            <label>Worker <input type="url" id="worker" value="http://localhost:8787"></label>
+            <!-- The cart (cart.js): a badge that opens it -->
+            <div id="cart"></div>
+        </div>
     </header>
     <p id="status" aria-live="polite">Loading…</p>
     <main></main>
@@ -89,6 +118,7 @@
     <script type="module">
         import { mirror } from 'navigate-gingerly/mirror.js';
         import { o2hRenderer } from 'o2h/worker/edge.js';
+        import { cart } from './cart.js';
         // Built from app.mjs (npm run build-store)
         import app from './app.json' with { type: 'json' };
 
@@ -108,9 +138,21 @@
                         ? `${escape(path)}, <span class="warn">rendered on this page: the worker said "${escape(error ?? 'nothing')}".</span>`
                         : `<span class="warn">${escape(error)}. Is the worker running (<code>npm run dev</code>)?</span>`;
                 document.body.dataset.ready = 'true';
+                // A link in the cart was followed: close it
+                document.getElementById('cart-panel')?.hidePopover?.();
             },
         });
         workerInput.addEventListener('change', () => store.refresh());
+
+        // The cart, with the app's pipes (usd, and the sums: itemCount, total). Additions are announced in the status.
+        cart({
+            into: document.getElementById('cart'),
+            pipes: app.options.pipes,
+            onChange(lines, line) {
+                const quantity = lines.includes(line) ? line.quantity : 0;
+                status.textContent = `${line.title.trim()}: ${quantity} in your cart.`;
+            },
+        });
     </script>
 </body>
 </html>
