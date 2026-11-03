@@ -19,14 +19,15 @@ const stars = (/** @type {string} */ at) => tree`
 const categories = tree`
     <nav class="categories" aria-label="Categories" ${each('?.')}><a href="products/category/${'?.'}">${'?.'}</a></nav>`;
 
-// [{ id, title, price, description, category, image, rating: { rate, count } }, …]
+// [{ id, title, price, description, category, image, rating: { rate, count } }, …]. Each photo is named for view
+// transitions (product-<id>), as the product view's is, so it moves between the two when navigating.
 const grid = {
     map: {
         categories,
         data: tree`
             <section class="products" ${each('?.')}>
                 <a class="product" href="products/${'?.id'}">
-                    <div class="photo"><img src=${'?.image'} alt="" loading="lazy"></div>
+                    <div class="photo"><img src=${'?.image'} alt="" loading="lazy" style="view-transition-name: product-${'?.id'}"></div>
                     <div class="body">
                         <p class="category">${'?.category'}</p>
                         <h2>${'?.title'}</h2>
@@ -49,7 +50,7 @@ const product = {
         categories,
         data: tree`
             <article class="detail">
-                <img src=${'?.image'} alt=${'?.title'}>
+                <img src=${'?.image'} alt=${'?.title'} style="view-transition-name: product-${'?.id'}">
                 <div class="info">
                     <h2>${'?.title'}</h2>
                     <p class="category">${'?.category'}</p>

@@ -62,7 +62,13 @@
                                                 {
                                                     "src :=": "?.image",
                                                     "alt :=": "",
-                                                    "loading :=": "lazy"
+                                                    "loading :=": "lazy",
+                                                    "style :=": {
+                                                        "join": [
+                                                            "view-transition-name: product-",
+                                                            "?.id"
+                                                        ]
+                                                    }
                                                 }
                                             ]
                                         ]
@@ -189,7 +195,13 @@
                                                 {
                                                     "src :=": "?.image",
                                                     "alt :=": "",
-                                                    "loading :=": "lazy"
+                                                    "loading :=": "lazy",
+                                                    "style :=": {
+                                                        "join": [
+                                                            "view-transition-name: product-",
+                                                            "?.id"
+                                                        ]
+                                                    }
                                                 }
                                             ]
                                         ]
@@ -316,7 +328,13 @@
                                                 {
                                                     "src :=": "?.image",
                                                     "alt :=": "",
-                                                    "loading :=": "lazy"
+                                                    "loading :=": "lazy",
+                                                    "style :=": {
+                                                        "join": [
+                                                            "view-transition-name: product-",
+                                                            "?.id"
+                                                        ]
+                                                    }
                                                 }
                                             ]
                                         ]
@@ -424,7 +442,13 @@
                                 "img",
                                 {
                                     "src :=": "?.image",
-                                    "alt :=": "?.title"
+                                    "alt :=": "?.title",
+                                    "style :=": {
+                                        "join": [
+                                            "view-transition-name: product-",
+                                            "?.id"
+                                        ]
+                                    }
                                 }
                             ],
                             [

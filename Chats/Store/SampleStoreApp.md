@@ -526,3 +526,150 @@ The check ran against my own `wrangler dev` and spa-ssi, in Chromium, Firefox an
 Nothing is committed.
 
 **Next, from the plan:** caching catalog GETs (stage 5). Or the join, if you'd like an order history page.
+
+## Bruce's Response - Transition Animation Support
+
+I noticed that the lazyLoad handler, which was designed with the idea of supporting lazy loaded routing, is not getting used.  Perhaps there are reasons it isn't appropriate, and the point of this is not to force use of it, if it isn't helpful.
+
+But that handler added transition animation support.  Does the routing support transition animation support?  If not, how would you recommend doing so? 
+
+## Claude's Response - Transition Animation Support
+
+**Short answer: no.** Routing doesn't animate today. [mirror.ts](../../../navigate-gingerly/mirror.ts) swaps pages with `into.innerHTML = html`, then hydrates, and nothing wraps that in a view transition.
+
+### Why lazyLoad isn't used
+
+lazyLoad and routing do different jobs:
+- **lazyLoad** clones a `<template>` that's **already on the page** into comment markers when a condition turns true, and hides or removes it when the condition turns false.
+- **A route's content** isn't a template on the page. It's HTML the **worker** renders on each navigation, and it replaces what was there.
+
+So lazyLoad has nothing to clone here. The store has no show/hide-a-template moment either: the cart panel is a popover, and its empty state is `each`'s `empty`. I don't think the store should use lazyLoad just to get transitions.
+
+What's worth reusing is **how** lazyLoad does transitions, in [transitionHelper.ts](../../../assign-gingerly/transitionHelper.ts):
+- it wraps the DOM change in `document.startViewTransition`;
+- it skips the in-flight transition when a new one starts;
+- it falls back to a plain change where the API is missing.
+
+### Recommendation: do it in mirror (navigate-gingerly)
+
+That's the layer that owns the swap, and it knows what the transition needs to know: the navigation, its direction, and when the new content is ready.
+
+1. **Fetch outside, swap inside.** The worker's response is awaited first, while the old page stays fully live. Only then:
+
+   ```ts
+   const swap = async () => {
+       into.innerHTML = html;
+       await renderer.hydrate(into, config, vm, appOptions);
+   };
+   transition ? document.startViewTransition({ update: swap, types: [direction] }).updateCallbackDone : swap();
+   ```
+
+   Putting the fetch inside the callback would freeze the page for the length of a network request; the browser also gives up on a callback that takes too long.
+2. **Hydrate inside the callback.** That way the "after" snapshot is taken once `data-pending` parts are bound and visible, so the Add-to-cart button doesn't pop in after the animation.
+3. **A newer navigation skips the running transition** (`skipTransition()`), as `withTransition` does. mirror already aborts the older fetch through `event.signal`.
+4. **Direction as a type:** `forward`, or `back` for a traverse to an earlier history entry (from `navigation.transition` / the navigate event's `navigationType` and the entries' indexes). CSS can then slide the opposite way going back with `:active-view-transition-type(back)`. Where `types` isn't supported, fall back to a `data-direction` attribute on `<html>` for the length of the transition.
+5. **Off by default.** It's opted into with a `transition` option on `mirror`: `true`, or a function of `{ from, to, direction }` returning `false`, a type list, or `true`. That allows, for example, animating only grid → product.
+6. **No animation without the API.** The swap happens as it does now. The first render (`ready`) never animates.
+
+**Everything visual stays in the page's CSS,** not the library:
+- `view-transition-name` on what should morph, for example the product photo between the grid and the detail. The name can be set per product in the tree as data, e.g. `style="view-transition-name: product-${'?.id'}"`, so the worker renders it, and it's still JSON.
+- the timing, and `@media (prefers-reduced-motion: reduce)` turning it off.
+
+**Why not cross-document view transitions** (`@view-transition { navigation: auto }`)? They apply only to full page loads. mirror's navigations are same-document (intercepted), so they need `startViewTransition`. Cross-document transitions would still help browsers without the Navigation API, where links reload the shell. That's one line of CSS in the store, independent of this.
+
+### What it would touch
+
+- **navigate-gingerly:**
+  - `mirror.ts`: the `transition` option, the swap above, skip on re-entry, and direction;
+  - its type, `MirrorOptions`;
+  - a test that a navigation with `transition: true` calls `startViewTransition` and still renders, and one that a second navigation skips the first;
+  - the README.
+- **o2h-edge's store:**
+  - `transition: true` in index.html;
+  - CSS: a cross-fade for `main`, the product photo morphing from the grid to the detail, a reverse slide for `back`, and reduced motion.
+- **assign-gingerly: nothing.** `withTransition` is keyed by a marker and takes a synchronous change, so it doesn't fit an async hydrate. mirror needs about 15 lines of its own.
+
+Shall I go ahead?
+
+## Bruce's Response - Implement in mirror
+
+> **Short answer: no.** Routing doesn't animate today. [mirror.ts](../../../navigate-gingerly/mirror.ts) swaps pages with `into.innerHTML = html`, then hydrates, and nothing wraps that in a view transition.
+
+Can you please create a TODO item to support retaining previously realized routes so they don't get thrown away?  I guess this could be included when we work on caching.
+
+I would also like to see if lazyLoad can be retrofitted to support dynamic html includes.  
+
+For now, please proceed with what you recommend.
+
+## Claude's Implementation Notes IX: transitions in mirror
+
+### The two TODOs
+
+- **Retaining realized routes:** [navigate-gingerly/Chats/TODO/RetainRealizedRoutes.md](../../../navigate-gingerly/Chats/TODO/RetainRealizedRoutes.md). It weighs two ways to keep pages:
+  - kept detached, keyed by history entry;
+  - kept in place, hidden and inert.
+
+  It also covers how long to keep them, and how to refresh a stale one. It's to be picked up with caching (stage 5).
+- **lazyLoad with dynamic HTML includes:** [assign-gingerly/…/LazyLoad/TODO/DynamicHtmlIncludes.md](../../../assign-gingerly/Chats/AssignFrom/Handlers/LazyLoad/TODO/DynamicHtmlIncludes.md).
+  - **What exists:** `instantiate` under `resolve` takes async protocols, so a page's own `include://` protocol (fetch → `<template>`) should already work. That's from reading `resolveValues`; I haven't tried it.
+  - **The gaps for a real retrofit:**
+    - a built-in protocol;
+    - a URL taken from the VM;
+    - replacing the content when the URL changes;
+    - failures;
+    - trust (`on*` attributes survive a template);
+    - retaining.
+  - **For routing:** lazyLoad could be a building block mirror uses, but mirror would still own route matching, installing and hydration.
+
+### Transitions
+
+**navigate-gingerly, [mirror.ts](../../../navigate-gingerly/mirror.ts): a `transition` option, off by default.**
+- It's `true`, or `({ from, to, direction }) => false | true | ['more', 'types']`.
+- **The order:**
+  - The worker's response is awaited first, with the old page still live.
+  - The swap and the hydration (or the page render, when the VM is passed back) then run inside `document.startViewTransition`. So the new snapshot already has its `data-pending` parts finished.
+- **Direction is the first transition type:**
+  - `back` for a traverse to an earlier entry, `forward` otherwise;
+  - reloads, the first render and `refresh()` aren't animated;
+  - where `types` isn't supported, they're on `<html data-transition-types>` while the transition runs.
+- **A newer transition skips the running one** (`skipTransition()`).
+- **Without the API,** it just swaps.
+- **Types:** `MirrorOptions.transition` and `MirrorTransition` in the types submodule, mirrored to the o2h and assign-gingerly checkouts. README updated.
+
+**The store:**
+- **[app.mjs](../../demo/store/app.mjs):** each photo has `style="view-transition-name: product-${'?.id'}"`, in the grid and in the product view. It's data (mixed attribute text), so the worker renders it, and app.json is rebuilt.
+- **[index.html](../../demo/store/index.html):**
+  - `transition: true`;
+  - CSS: `main` slides out and in the way the navigation goes, and back the other way (`:active-view-transition-type(back)`, plus the attribute fallback);
+  - the photo moves between the grid and its view;
+  - everything is off under `prefers-reduced-motion`;
+  - `@view-transition { navigation: auto }` cross-fades full loads, for browsers without the Navigation API.
+
+### Checked
+
+- **navigate-gingerly's tests:** 32 pass, in Node and in Chromium, Firefox and WebKit. Two are new:
+  - **Swaps inside a transition, typed by direction:**
+    - the new page is hydrated when its snapshot is taken;
+    - the function adds types (`['forward', 'detail']`) or vetoes;
+    - the first render and `refresh()` aren't animated.
+  - **Two navigations back to back:** the newer page wins (URL, title, content), and no attribute is left behind.
+- **The store, against my worker on 8788, in all three browsers:**
+  - grid → product 3 is `forward`, Back is `back`, and two quick category clicks end on the second;
+  - every transition's `ready` and `finished` resolved;
+  - the photo is named `product-3` on both pages, and nothing is left pending.
+- **A slowed-down frame in Chromium** shows the shirt's photo moving from its card toward the product view, while the rest fades.
+
+**Not exercised directly:** `skipTransition()` on a transition still running. In both "back to back" checks, the first navigation was aborted before its swap began, so there was nothing to skip yet. Testing it would take a worker slow enough mid-hydration.
+
+**Changed:**
+- **navigate-gingerly:**
+  - mirror.ts, and its .js, built with `tsc -p .`;
+  - the types;
+  - the tests' shell and spec;
+  - the README;
+  - the TODO.
+- **assign-gingerly:** the TODO doc only.
+- **o2h:** the types copy.
+- **o2h-edge:** app.mjs and app.json, index.html, the README.
+
+Nothing is committed.

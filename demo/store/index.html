@@ -90,6 +90,26 @@
         .empty { color: var(--muted); }
         .total { display: flex; justify-content: space-between; margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 1.1rem; }
 
+        /* Navigations (mirror's transition option): the page slides a little, the way it's going (back: the other way),
+           and a product's photo (view-transition-name: product-<id>, from app.mjs) moves between the grid and its view */
+        @view-transition { navigation: auto; }   /* without the Navigation API, links load the shell again: cross-fade those */
+        main { view-transition-name: page; }
+        ::view-transition-group(page) { animation: none; }
+        ::view-transition-old(page) { animation: .18s ease-in both page-out; }
+        ::view-transition-new(page) { animation: .25s ease-out both page-in; }
+        html:active-view-transition-type(back)::view-transition-old(page),
+        html[data-transition-types~="back"]::view-transition-old(page) { animation-name: page-out-back; }
+        html:active-view-transition-type(back)::view-transition-new(page),
+        html[data-transition-types~="back"]::view-transition-new(page) { animation-name: page-in-back; }
+        ::view-transition-group(*) { animation-duration: .3s; }
+        @keyframes page-out { to { opacity: 0; transform: translateX(-24px); } }
+        @keyframes page-in { from { opacity: 0; transform: translateX(24px); } }
+        @keyframes page-out-back { to { opacity: 0; transform: translateX(24px); } }
+        @keyframes page-in-back { from { opacity: 0; transform: translateX(-24px); } }
+        @media (prefers-reduced-motion: reduce) {
+            ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+        }
+
         footer { color: var(--muted); font-size: .8rem; }
         @media (max-width: 640px) {
             .detail { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
@@ -131,6 +151,8 @@
             app,
             into: document.querySelector('main'),
             renderer: o2hRenderer(),
+            // Animate in-app navigations (the CSS above)
+            transition: true,
             onRender({ path, by, elapsed, pending, error }) {
                 status.innerHTML = by === 'worker'
                     ? `${escape(path)}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
