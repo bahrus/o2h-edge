@@ -390,3 +390,68 @@ pipes: {
 3. **The join**, only if an order history page is wanted.
 
 Shall I go ahead with 1?
+
+## Bruce's Response VII
+
+Please proceed with 1
+
+
+## Claude's Implementation Notes VII: the `sum` data pipe
+
+**What it does:**
+
+```js
+const pipes = dataPipes({
+    itemCount: { sum: '?.quantity' },                  // the badge: 2 + 1 → 3
+    subtotal:  { sum: ['?.quantity', '?.price'] },     // quantity × price per line, added up → 242.2
+    usd:       { intl: 'NumberFormat', locale: 'en-US', options: { style: 'currency', currency: 'USD' } },
+    total:     { chain: ['subtotal', 'usd'] },         // '$242.20'
+});
+// '?.lines?.itemCount', '?.lines?.total'
+```
+
+- **Unary, like every pipe:** it takes the array, resolves each path against each element, multiplies the paths' values within an element, and adds the results.
+- **The paths are ordinary `?.` paths,** resolved with assign-gingerly's own `getValue` and the same pipes object. So an element's path can use the other pipes, for example `{ sum: '?.price?.toCents' }`.
+- **Edge cases:**
+  - An element whose path leads nowhere, or to something that isn't a number, adds 0.
+  - Numeric strings count (`'3'` → 3).
+  - An empty array totals 0.
+  - A value that isn't an array gives `undefined`, so nothing is rendered, like any path that leads nowhere.
+- **No rounding:** `109.95 × 2 + 22.3` is `242.20000000000002`. The currency `intl` pipe formats it as `$242.20`, which is the intended way to show money. A plain total could chain `{ use: 'toFixed', args: [2] }`.
+- **Errors come early,** like the other kinds: `{ sum: 'quantity' }` (not a `?.` path) or `{ sum: [] }` throws when `dataPipes()` is called.
+
+**Changes:**
+
+- **assign-gingerly** (`.ts` only; your watcher has already rebuilt `pipes/dataPipes.js`):
+  - **`pipes/dataPipes.ts`:**
+    - the new `sumPipe`, and `fromDescriptor` dispatches to it;
+    - the "neither a function nor a pipe descriptor" error now lists `{ sum }`;
+    - the header comment includes a sum example and an updated "deliberately small".
+  - **`docs/pipes.md`:**
+    - a `sum` row in the kinds table;
+    - a "Totals" note with the cart example: `?.length` counts an array's elements, while `sum` counts what they hold;
+    - the "Deliberately small" bullet updated.
+  - **`tests/pure-modules.spec.ts`:** a new test covering:
+    - the item count, the subtotal, the currency total by chain;
+    - an element path through another pipe, and an array of plain numbers;
+    - empty and missing values, numeric strings, a non-array;
+    - surviving `structuredClone`;
+    - both early errors.
+- **The types submodule:** `SumPipeDescriptor` (`{ sum: string | string[] }`), added to the `PipeDescriptor` union. I made the same edit in the three checkouts this resolves through: `assign-gingerly/types`, `o2h/types` and `navigate-gingerly/types`. So `O2HAppOptions` (Response II in CreateBuildStep) accepts `sum` pipes with no change of its own. I didn't touch `assign-gingerly/inferencer/types`, the nested one.
+- **o2h:** no code change, since `prepareO2HTransform` already keeps any descriptor a data pipe carries, and `reviveO2HTransform` remakes it with `dataPipes`. `tests/o2h.spec.ts` has a new Node test. It checks that a total survives `prepareO2HTransform` with nothing lost, that the transform stores `{ sum: […] }`, and that the revived transform renders `<p data-count="3">$242.20</p>`.
+
+**Tested:**
+
+- **assign-gingerly:** the full Chromium suite, 64/64, in a scratch copy built with `tsc`.
+  - On the first run, the browser tests timed out. Port 8000 already had a server on it that serves another folder, which isn't mine, so I left it running. Playwright reused it, so the test pages weren't found.
+  - I gave the scratch copy its own port (8031).
+  - spa-ssi also doesn't start through a `node_modules` junction: its "run if executed directly" check compares the real path with the junction path. So I started it by its real path.
+- **o2h:** all 12 Node tests pass, in a scratch copy whose `node_modules/assign-gingerly` points to your repo.
+
+**Before the store can use it at the edge:** o2h depends on the published `assign-gingerly` 0.0.105, which is in `o2h/node_modules`, and that copy has no `sum`.
+- The new o2h test fails until o2h's dependency is updated. I didn't run it against that copy: it's my expectation from the code, not a result.
+- The worker bundles o2h, which resolves assign-gingerly from `o2h/node_modules`. So I'd expect a stored transform that uses `sum` to fail to revive there, with "neither a function nor a pipe descriptor", until then. I haven't tried this.
+
+So the order is: publish assign-gingerly, then bump it in o2h (`npm run update`).
+
+Nothing is committed. Next, per the plan, is stage 2: a small cart in the store, with the badge and total through `sum`.
