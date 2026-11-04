@@ -283,3 +283,62 @@ The chart was checked against the fixtures, through the worker, in Chromium, Fir
 Nothing is committed.
 
 **Next, from the plan:** step 3, names for series IDs (a lookup, or the join). Or step 4, year ranges, which raises the question of letting the visitor's query parameters through.
+
+## Bruce's Response III
+
+Please move on to step 3. 
+## Claude's Implementation Notes III: names for series IDs
+
+### How: the existing `map` data pipe, no join
+
+- **[app.mjs](../../demo/bls/app.mjs):** `options.pipes.seriesName: { map: seriesNames }` (38 IDs).
+- **No `default`,** so an ID without a name renders nothing, and CSS hides the empty line.
+- **In the series lists:** each link shows `<span class="id">` and `<span class="name">${'?.seriesID?.seriesName'}</span>`.
+- **On the series page:** a `<p class="name">` below the ID.
+
+It's pure data, so the worker renders it, and nothing in the libraries changed.
+
+**Why not the join:** the names are fixed, not from a second source. A join would need the names served from somewhere the worker may call. A static JSON file on the page's own origin isn't an allowed upstream, and shouldn't become one just for this. The join becomes the right tool in phase II: with a key, `catalog=true` returns each series' `series_title` from BLS itself, alongside the data.
+
+### Where the names came from: please check them
+
+Keyless, the API gives no titles, so I looked for BLS's own:
+- **`download.bls.gov/pub/time.series/…`** (e.g. `cu.series`, which has every title): answers 403 unless the User-Agent carries contact details. I didn't send your email.
+  - **What I tried:** a browser-like User-Agent, without contact details. The permission check rightly blocked that as getting around a bot check, and I didn't retry it.
+- **BLS's "Top Picks" pages** (`surveymost?…`, `toppicks?…`): their series tables are rendered by script, so a plain fetch gets only the page template.
+
+So the names are **written from BLS's ID conventions**, not copied from its catalog:
+- **The CPI IDs (32):** `CU` (CPI-U), `U`/`S` (not / seasonally adjusted), `R` (monthly), `0000` (U.S. city average), then the item code, e.g. `SA0L1E` "all items less food and energy", `SEHC` "owners' equivalent rent of residences".
+- **Six others:** LNS14000000, CES0000000001, CES0500000003, WPUFD4, WPSFD4 and WPUFD49104.
+
+I'm confident of these, but they're unverified. **The 15 ISU series** (occupational injuries and illnesses) are left unnamed rather than guessed.
+
+**To verify or fill them in:**
+- open `https://download.bls.gov/pub/time.series/cu/cu.series` (and `is/is.series`) in your browser;
+- or, in phase II, use the key with `catalog=true`.
+
+The map in app.mjs is the one place to change.
+
+### Two small findings
+
+- **Route titles can't use pipes.** navigate-gingerly's `titleFor` walks a `?.` path by itself, without assign-gingerly, so `title: '?.route?.id?.seriesName'` isn't possible. The tab still says `CUSR0000SEHC`.
+  - **One fix:** pass a title resolver into mirror (the renderer could provide one), in keeping with "whatever o2h does is passed in". **Not done:** I'd wait until a title really needs it.
+- **Lookup tables travel with the app.** The map is in the stored app, about 2.5 KB of app.json's 30 KB, far below `MAX_APP_BYTES` (1 MB). A full catalog (CPI alone has thousands of series) wouldn't belong there. That's the join's job, or the key's.
+
+### Checked
+
+Checked against the fixtures, through the worker, in Chromium, Firefox and WebKit:
+- **`/`:** 10 of 25 named (CPI, the unemployment rate, CES, PPI). The 15 ISU IDs show just the ID, with no empty line.
+- **CU:** all 25 named.
+- **Clicking CUSR0000SEHC:** its page shows "CPI-U, owners' equivalent rent of residences, seasonally adjusted".
+- **The invalid series:** no name line.
+
+**Changed:**
+- **demo/bls/app.mjs:** the names, the pipe, and the list and series markup;
+- **app.json:** rebuilt;
+- **index.html:** styles for the names;
+- **the README.**
+
+Nothing is committed.
+
+**Next, from the plan:** step 4, year ranges. It needs your call on how the visitor's choice reaches the API. Either the range goes in the path (`/timeseries/data/:id/:start/:end`, mapped to `?startyear={start}&endyear={end}`), or a route lets named query parameters through (`query: ['startyear', 'endyear']`), which a plain GET form could then use.

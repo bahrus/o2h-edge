@@ -35,7 +35,10 @@
         /* Lists of series and surveys */
         .series-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
         .series-list a, .surveys a { display: block; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; text-decoration: none; }
-        .series-list a { font-family: ui-monospace, monospace; }
+        .series-list a { display: grid; gap: 2px; }
+        .series-list .id { font-family: ui-monospace, monospace; }
+        .series-list .name { font-size: .85rem; color: var(--text); }
+        .series-list .name:empty, .series .name:empty { display: none; }
         .series-list a:hover, .surveys a:hover { border-color: var(--accent); }
         .surveys { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
         .surveys a { color: var(--text); }
@@ -51,6 +54,7 @@
         .flags:empty { display: none; }
 
         /* One series */
+        .series .name { margin: -4px 0 12px; font-size: 1.05rem; }
         .series h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 1.3rem; }
         .latest { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 0 0 16px; color: var(--muted); }
         .latest .value { font-size: 2.2rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }

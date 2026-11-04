@@ -41,9 +41,24 @@
                                                     "timeseries/data/",
                                                     "?.seriesID"
                                                 ]
-                                            },
-                                            "textContent": "?.seriesID"
-                                        }
+                                            }
+                                        },
+                                        [
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "id",
+                                                    "textContent": "?.seriesID"
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "name",
+                                                    "textContent": "?.seriesID?.seriesName"
+                                                }
+                                            ]
+                                        ]
                                     ]
                                 ]
                             ],
@@ -253,9 +268,24 @@
                                                     "timeseries/data/",
                                                     "?.seriesID"
                                                 ]
-                                            },
-                                            "textContent": "?.seriesID"
-                                        }
+                                            }
+                                        },
+                                        [
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "id",
+                                                    "textContent": "?.seriesID"
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "name",
+                                                    "textContent": "?.seriesID?.seriesName"
+                                                }
+                                            ]
+                                        ]
                                     ]
                                 ]
                             ],
@@ -302,6 +332,13 @@
                                 "h2",
                                 {
                                     "textContent": "?.seriesID"
+                                }
+                            ],
+                            [
+                                "p",
+                                {
+                                    "class :=": "name",
+                                    "textContent": "?.seriesID?.seriesName"
                                 }
                             ],
                             {
@@ -537,6 +574,48 @@
             },
             "high": {
                 "max": "?.value"
+            },
+            "seriesName": {
+                "map": {
+                    "CUUR0000SA0": "CPI-U, all items, not seasonally adjusted",
+                    "CUSR0000SA0": "CPI-U, all items, seasonally adjusted",
+                    "CUUR0000SA0L1E": "CPI-U, all items less food and energy, not seasonally adjusted",
+                    "CUSR0000SA0L1E": "CPI-U, all items less food and energy, seasonally adjusted",
+                    "CUUR0000SA0E": "CPI-U, energy, not seasonally adjusted",
+                    "CUSR0000SA0E": "CPI-U, energy, seasonally adjusted",
+                    "CUUR0000SAF1": "CPI-U, food, not seasonally adjusted",
+                    "CUSR0000SAF1": "CPI-U, food, seasonally adjusted",
+                    "CUUR0000SAF11": "CPI-U, food at home, not seasonally adjusted",
+                    "CUSR0000SAF11": "CPI-U, food at home, seasonally adjusted",
+                    "CUUR0000SAH1": "CPI-U, shelter, not seasonally adjusted",
+                    "CUSR0000SAH1": "CPI-U, shelter, seasonally adjusted",
+                    "CUUR0000SEHA": "CPI-U, rent of primary residence, not seasonally adjusted",
+                    "CUSR0000SEHA": "CPI-U, rent of primary residence, seasonally adjusted",
+                    "CUUR0000SEHC": "CPI-U, owners' equivalent rent of residences, not seasonally adjusted",
+                    "CUSR0000SEHC": "CPI-U, owners' equivalent rent of residences, seasonally adjusted",
+                    "CUUR0000SAA": "CPI-U, apparel, not seasonally adjusted",
+                    "CUSR0000SAA": "CPI-U, apparel, seasonally adjusted",
+                    "CUUR0000SAM": "CPI-U, medical care, not seasonally adjusted",
+                    "CUSR0000SAM": "CPI-U, medical care, seasonally adjusted",
+                    "CUUR0000SAR": "CPI-U, recreation, not seasonally adjusted",
+                    "CUSR0000SAR": "CPI-U, recreation, seasonally adjusted",
+                    "CUUR0000SETA01": "CPI-U, new vehicles, not seasonally adjusted",
+                    "CUSR0000SETA01": "CPI-U, new vehicles, seasonally adjusted",
+                    "CUUR0000SETA02": "CPI-U, used cars and trucks, not seasonally adjusted",
+                    "CUSR0000SETA02": "CPI-U, used cars and trucks, seasonally adjusted",
+                    "CUUR0000SETB01": "CPI-U, gasoline (all types), not seasonally adjusted",
+                    "CUSR0000SETB01": "CPI-U, gasoline (all types), seasonally adjusted",
+                    "CUUR0000SASLE": "CPI-U, services less energy services, not seasonally adjusted",
+                    "CUSR0000SASLE": "CPI-U, services less energy services, seasonally adjusted",
+                    "CUUR0000SACL1E": "CPI-U, commodities less food and energy commodities, not seasonally adjusted",
+                    "CUSR0000SACL1E": "CPI-U, commodities less food and energy commodities, seasonally adjusted",
+                    "LNS14000000": "Unemployment rate, seasonally adjusted",
+                    "CES0000000001": "All employees, total nonfarm, seasonally adjusted (thousands)",
+                    "CES0500000003": "Average hourly earnings of all employees, total private, seasonally adjusted",
+                    "WPUFD4": "PPI, final demand, not seasonally adjusted",
+                    "WPSFD4": "PPI, final demand, seasonally adjusted",
+                    "WPUFD49104": "PPI, final demand less foods, energy, and trade services, not seasonally adjusted"
+                }
             }
         }
     }

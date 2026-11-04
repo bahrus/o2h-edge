@@ -91,6 +91,7 @@ Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading 
 The [BLS Public Data API](https://www.bls.gov/developers/) (v2, keyless), as a navigate-gingerly app like the store, in [`demo/bls/`](demo/bls/):
 - **The pages:** popular series, the surveys, a survey (its flags and its popular series), and a series (the latest value, a bar chart, and a table with footnotes).
 - **The chart is rendered by the worker:** the `min` / `max` data pipes give the series' range. CSS scales each bar between them, from custom properties set in `style` attributes. A missing value (`"-"`) is a gap.
+- **Names for series IDs** come from a `map` data pipe in the app (`seriesName`), since keyless, BLS sends IDs only. They were written from BLS's ID conventions and haven't been checked against its catalog. IDs without a name show just the ID.
 - **Paths:** they mirror the API's (`surveys/CU`, `timeseries/data/CUUR0000SA0`).
 - **The app:** [`app.mjs`](demo/bls/app.mjs) builds to `app.json`, with `npm run build-bls` (or `watch-bls`).
 

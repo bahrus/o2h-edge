@@ -12,11 +12,35 @@ import { tree, each, choose } from 'assign-gingerly/DX/tree.js';
 // 200 ("Invalid Series for Series X"), so each page shows them (an empty list shows nothing).
 const messages = tree`<ul class="messages" ${each('?.')}><li>${'?.'}</li></ul>`;
 
-// [{ seriesID }, …]: links to each series
+// [{ seriesID }, …]: links to each series, named where the app knows the name (the seriesName pipe)
 const seriesList = tree`
     <ul class="series-list" ${each('?.', { empty: tree`<li class="empty">No series.</li>` })}>
-        <li><a href="timeseries/data/${'?.seriesID'}">${'?.seriesID'}</a></li>
+        <li><a href="timeseries/data/${'?.seriesID'}"><span class="id">${'?.seriesID'}</span><span class="name">${'?.seriesID?.seriesName'}</span></a></li>
     </ul>`;
+
+// Names for series IDs. Keyless, the API gives IDs only (titles come with catalog=true, which needs a key), so the
+// app names the ones it shows most, from BLS's ID conventions (CU: CPI-U; U / S: not / seasonally adjusted; 0000:
+// U.S. city average; then the item). Not checked against BLS's catalog. Unnamed IDs show just the ID.
+const cpi = (/** @type {string} */ item) => ({
+    [`CUUR0000${item}`]: `CPI-U, ${CPI_ITEMS[item]}, not seasonally adjusted`,
+    [`CUSR0000${item}`]: `CPI-U, ${CPI_ITEMS[item]}, seasonally adjusted`,
+});
+/** @type {Record<string, string>} */
+const CPI_ITEMS = {
+    SA0: 'all items', SA0L1E: 'all items less food and energy', SA0E: 'energy', SAF1: 'food', SAF11: 'food at home',
+    SAH1: 'shelter', SEHA: 'rent of primary residence', SEHC: "owners' equivalent rent of residences", SAA: 'apparel',
+    SAM: 'medical care', SAR: 'recreation', SETA01: 'new vehicles', SETA02: 'used cars and trucks',
+    SETB01: 'gasoline (all types)', SASLE: 'services less energy services', SACL1E: 'commodities less food and energy commodities',
+};
+const seriesNames = {
+    ...Object.assign({}, ...Object.keys(CPI_ITEMS).map(cpi)),
+    LNS14000000: 'Unemployment rate, seasonally adjusted',
+    CES0000000001: 'All employees, total nonfarm, seasonally adjusted (thousands)',
+    CES0500000003: 'Average hourly earnings of all employees, total private, seasonally adjusted',
+    WPUFD4: 'PPI, final demand, not seasonally adjusted',
+    WPSFD4: 'PPI, final demand, seasonally adjusted',
+    WPUFD49104: 'PPI, final demand less foods, energy, and trade services, not seasonally adjusted',
+};
 
 // Popular series (BLS's 25 headline series)
 const popular = {
@@ -68,6 +92,7 @@ const series = {
         '?.data?.Results?.series?.0': tree`
             <section class="series">
                 <h2>${'?.seriesID'}</h2>
+                <p class="name">${'?.seriesID?.seriesName'}</p>
                 ${choose('?.data?.0?.latest', { true: tree`
                     <p class="latest">
                         <span class="value">${'?.data?.0?.value'}</span>
@@ -110,6 +135,8 @@ export const app = {
         pipes: {
             low: { min: '?.value' },
             high: { max: '?.value' },
+            // A lookup (no default: an unnamed ID renders nothing)
+            seriesName: { map: seriesNames },
         },
     },
 };
