@@ -13,6 +13,8 @@
     "update": "ncu -u && npm install",
     "build-store": "node demo/store/app.mjs",
     "watch-store": "node --watch demo/store/app.mjs",
+    "build-bls": "node demo/bls/app.mjs",
+    "watch-bls": "node --watch demo/bls/app.mjs",
     "serve": "node ./node_modules/spa-ssi/serve.js"
   },
   "license": "MIT",

@@ -98,3 +98,111 @@ Events and the cart, popovers, hydration of interactive parts. The store covers 
 Before starting, two questions: **keyless or a worker-held key** (issue 9), and **whether it lives beside the store** (`demo/bls/`, my assumption) or elsewhere.
 
 My four probe requests count against today's 25 for your IP.
+
+## Bruce's Response I
+
+>  **keyless or a worker-held key**
+
+Let's start with keyless, but hopefully we will be able to add worker-held key in phase II?
+
+> **whether it lives beside the store**
+
+Please proceed with demo/bls/
+
+
+
+
+
+## Claude's Implementation Notes I: step 1, keyless
+
+Keyless for now. Phase II's worker-held key is noted below.
+
+### What there is
+
+[demo/bls/](../../demo/bls/), beside the store:
+- [app.mjs](../../demo/bls/app.mjs) → app.json (`npm run build-bls` / `watch-bls`);
+- [index.html](../../demo/bls/index.html), with `transition: true`, which gives the default cross-fade.
+
+| Path | Sources | Shows |
+|---|---|---|
+| `/` | mapped: `timeseries/popular` | BLS's 25 popular series, as links |
+| `/surveys` | aligned | The 70 surveys |
+| `/surveys/:abbr` | mapped: `surveys/{abbr}`, `timeseries/popular?survey={abbr}` | The survey's name, its flags (net / percent changes, annual averages), and its popular series |
+| `/timeseries/data/:id` | aligned | The latest value, large, and a table: year, period, value, footnotes |
+
+There are **no layout sources**: each would cost a query on every page.
+
+### Testing without spending the quota
+
+- **Seven real responses, fetched once, kept as fixtures.** They are:
+  - popular;
+  - popular in CU;
+  - the surveys;
+  - CU;
+  - CUUR0000SA0 (CPI);
+  - LNS14000000 (unemployment);
+  - an invalid series.
+- **The check runs against them,** through the real worker:
+  - a local stand-in for BLS serves the fixtures;
+  - my `wrangler dev` (8788) runs with the existing `ALLOW_LOCAL_UPSTREAM`;
+  - the page's `app.json` is rewritten to point at the stand-in.
+- **With your `wrangler dev`, the demo calls BLS itself.** Today's count for your IP is 11: my 4 earlier probes, plus the 7 fixtures.
+
+### What it uncovered
+
+The real data had surprises the docs didn't mention:
+- **`"value": "-"`** for a missing month, with a footnote: October 2025, "Data unavailable due to the 2025 lapse in appropriations".
+- **`footnotes`** is `[{}]` when there are none.
+- **`Results` is an object** in every response, not an array as some doc samples show.
+
+How each issue from my thoughts turned out:
+
+1. **Errors in a 200: displayed with what exists, but not reported.**
+   - **Displayed:** each page maps `?.data?.message` to a list, and CSS hides it when it's empty. The invalid series shows "Invalid Series for Series NOPE0000000", "No data." (`each`'s `empty`), and no "latest" (a `choose`).
+   - **But:** mirror and the status line still say "rendered by the worker", and the worker answered 200. If that should count as a failure, a source would need a way to say so. **It's still open,** and I'd leave it until something needs it.
+2. **Envelopes: fine.** Path keys with array indexes work as map keys (`'?.data?.Results?.series?.0'`) and in route titles (`'?.survey?.Results?.survey?.0?.survey_name'`). It's wordy, but no `at:` is needed yet.
+3. **Strings as numbers: no problem so far.** The values are shown as sent, `"-"` included. Formatting them (`Intl.NumberFormat`) would turn `"-"` into "NaN", so a number pipe needs a rule for non-numbers. That will matter for the chart.
+4. **The chart:** step 2.
+5. **`M13` annual averages:** the default request (the last three years) doesn't include them; annual averages need `annualaverage=true`, which needs a key. The CSS marks the row anyway (`tr[data-period="M13"]`). **No filter is needed yet.**
+6. **`[{}]` footnotes: handled with CSS.** The `each` over footnotes renders an empty `<span>` for `{}`, and `span:empty` hides it. Of 33 rows, 32 have an empty one.
+   - **The limitation:** it's fine for display, but the empty element is still there for anything that counts children.
+7. **Names:** step 3. The surveys and survey pages show bare IDs.
+8. **Quota:**
+   - **The numbers:** one walk through the demo (popular → a series → surveys → CU → a series → an invalid one) is **8 BLS queries**. So keyless, it's **about three visitors a day**.
+   - **What it means:** caching with the app's own freshness looks required before deploying it.
+9. **The key:** phase II, as you said. Worth deciding then: a worker secret per upstream origin, added to the request by the worker, never visible to apps or pages.
+10. **Query parameters** (year ranges): step 4.
+11. **POST:** not needed so far.
+
+**A new one, in tree:** whitespace between sibling elements doesn't survive.
+- **The symptom:** `<h2><span>${name}</span> <span class="abbr">${abbr}</span></h2>` renders "…ConsumersCU". The gap is now a CSS margin.
+- **Why it matters:** the accessible name is still "…ConsumersCU". The surveys list has the same issue ("CUConsumer Price Index…").
+- **Also:** text after a child element, or `${…}` beside one, is refused at build time. That's a known rule, but it pushed this towards wrapping text in spans, which is where the whitespace loss shows.
+- **Worth a look in assign-gingerly:** keep whitespace-only text between elements as a single space.
+
+### Checked
+
+The pages were checked against the fixtures, through the worker, in Chromium, Firefox and WebKit:
+- **`/`:** 25 links.
+- **Clicking the first** gives CUUR0000SA0:
+  - latest 336.940, September 2026;
+  - 33 rows;
+  - October 2025 shows "-" and its footnote;
+  - only one footnote is visible.
+- **The surveys:** 70.
+- **CU:**
+  - the title is from the survey;
+  - the flags are "Percent changes" and "Annual averages" (`allowsNetChange` is "false", so it's omitted);
+  - 25 popular series.
+- **LNS14000000 by deep link:** two footnotes (January 2026's revision, and October 2025).
+- **The invalid series:** the message, "No data.", and no latest.
+- **At 375px (Chromium):** no horizontal scroll on the series or the surveys. Long footnotes wrap: a URL was clipped before `overflow-wrap`.
+
+**Changed:**
+- **demo/bls/:** new, `app.mjs`, `app.json` and `index.html`;
+- **package.json:** `build-bls` / `watch-bls`;
+- **README:** a "Demo: BLS data" section.
+
+Nothing in the libraries changed. Nothing is committed.
+
+**Next, step 2: the chart.** Bars drawn by CSS from the values need the series' min and max. I'd add `max` / `min` data pipes to assign-gingerly, beside `sum`. They would skip non-numbers like `"-"`.

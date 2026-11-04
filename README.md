@@ -86,6 +86,22 @@ A store over the [Fake Store API](https://fakestoreapi.com/docs), as a [navigate
 
 Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading `/demo/store/products/3`) need the server to answer with the shell: spa-ssi does from the version after 0.0.30, which serves the nearest directory's `index.html` for a missing path. With 0.0.30, start from `/demo/store/`.
 
+## Demo: BLS data
+
+The [BLS Public Data API](https://www.bls.gov/developers/) (v2, keyless), as a navigate-gingerly app like the store, in [`demo/bls/`](demo/bls/):
+- **The pages:** popular series, the surveys, a survey (its flags and its popular series), and a series (the latest value, and a table with footnotes).
+- **Paths:** they mirror the API's (`surveys/CU`, `timeseries/data/CUUR0000SA0`).
+- **The app:** [`app.mjs`](demo/bls/app.mjs) builds to `app.json`, with `npm run build-bls` (or `watch-bls`).
+
+**What's different from the store:**
+- BLS wraps everything in an envelope (`Results.series[0].data`), so the trees map deep paths.
+- Errors arrive inside a 200 (`message: ["Invalid Series …"]`), and every page shows them.
+- Values are strings; a missing one is `"-"`.
+
+**Without a key, BLS allows 25 queries a day per IP.** The worker's calls count against the machine running it (`npm run dev`), or Cloudflare's shared address once deployed. A page costs one query, and a survey costs two. So nothing is fetched on every page: there are no layout sources.
+
+Serve it like the store, and open `/demo/bls/`.
+
 ## Demo: the stored transforms
 
 [`demo/transforms.html`](demo/transforms.html) lists the transforms a worker holds: key, the data fields each reads, size and date. Open one to see its JSON, indented and colored. **Copy raw** copies it exactly as stored, so storing the copy elsewhere gives the same key. Serve it like the APOD demo. For a deployed worker, enter its URL and the admin token, which the page keeps for that tab only (`sessionStorage`).

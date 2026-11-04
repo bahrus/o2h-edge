@@ -1,0 +1,458 @@
+{
+    "api": "https://api.bls.gov/publicAPI/v2",
+    "routes": [
+        {
+            "pattern": "/",
+            "sources": {
+                "data": "timeseries/popular"
+            },
+            "config": {
+                "map": {
+                    "?.data?.message": [
+                        "ul",
+                        {
+                            "class :=": "messages"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "?.data?.Results?.series": [
+                        "ul",
+                        {
+                            "class :=": "series-list"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {},
+                                [
+                                    [
+                                        "a",
+                                        {
+                                            "href :=": {
+                                                "join": [
+                                                    "timeseries/data/",
+                                                    "?.seriesID"
+                                                ]
+                                            },
+                                            "textContent": "?.seriesID"
+                                        }
+                                    ]
+                                ]
+                            ],
+                            "of": "?.",
+                            "empty": [
+                                "li",
+                                {
+                                    "class :=": "empty",
+                                    "textContent": "No series."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            "title": "BLS data"
+        },
+        {
+            "pattern": "/surveys",
+            "config": {
+                "map": {
+                    "?.data?.message": [
+                        "ul",
+                        {
+                            "class :=": "messages"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "?.data?.Results?.survey": [
+                        "ul",
+                        {
+                            "class :=": "surveys"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {},
+                                [
+                                    [
+                                        "a",
+                                        {
+                                            "href :=": {
+                                                "join": [
+                                                    "surveys/",
+                                                    "?.survey_abbreviation"
+                                                ]
+                                            }
+                                        },
+                                        [
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "abbr",
+                                                    "textContent": "?.survey_abbreviation"
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "textContent": "?.survey_name"
+                                                }
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            "of": "?.",
+                            "key": "?.survey_abbreviation"
+                        }
+                    ]
+                }
+            },
+            "title": "Surveys"
+        },
+        {
+            "pattern": "/surveys/:abbr",
+            "sources": {
+                "survey": "surveys/{abbr}",
+                "popular": "timeseries/popular?survey={abbr}"
+            },
+            "config": {
+                "map": {
+                    "?.survey?.message": [
+                        "ul",
+                        {
+                            "class :=": "messages"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "?.survey?.Results?.survey?.0": [
+                        "header",
+                        {
+                            "class :=": "survey"
+                        },
+                        [
+                            [
+                                "h2",
+                                {},
+                                [
+                                    [
+                                        "span",
+                                        {
+                                            "textContent": "?.survey_name"
+                                        }
+                                    ],
+                                    [
+                                        "span",
+                                        {
+                                            "class :=": "abbr",
+                                            "textContent": "?.survey_abbreviation"
+                                        }
+                                    ]
+                                ]
+                            ],
+                            [
+                                "ul",
+                                {
+                                    "class :=": "flags"
+                                },
+                                [
+                                    {
+                                        "switch": "?.allowsNetChange",
+                                        "cases": {
+                                            "true": [
+                                                "li",
+                                                {
+                                                    "textContent": "Net changes"
+                                                }
+                                            ]
+                                        },
+                                        "default": null
+                                    },
+                                    {
+                                        "switch": "?.allowsPercentChange",
+                                        "cases": {
+                                            "true": [
+                                                "li",
+                                                {
+                                                    "textContent": "Percent changes"
+                                                }
+                                            ]
+                                        },
+                                        "default": null
+                                    },
+                                    {
+                                        "switch": "?.hasAnnualAverages",
+                                        "cases": {
+                                            "true": [
+                                                "li",
+                                                {
+                                                    "textContent": "Annual averages"
+                                                }
+                                            ]
+                                        },
+                                        "default": null
+                                    }
+                                ]
+                            ]
+                        ]
+                    ],
+                    "?.popular?.message": [
+                        "ul",
+                        {
+                            "class :=": "messages"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "?.popular?.Results?.series": [
+                        "ul",
+                        {
+                            "class :=": "series-list"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {},
+                                [
+                                    [
+                                        "a",
+                                        {
+                                            "href :=": {
+                                                "join": [
+                                                    "timeseries/data/",
+                                                    "?.seriesID"
+                                                ]
+                                            },
+                                            "textContent": "?.seriesID"
+                                        }
+                                    ]
+                                ]
+                            ],
+                            "of": "?.",
+                            "empty": [
+                                "li",
+                                {
+                                    "class :=": "empty",
+                                    "textContent": "No series."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            "title": "?.survey?.Results?.survey?.0?.survey_name"
+        },
+        {
+            "pattern": "/timeseries/data/:id",
+            "config": {
+                "map": {
+                    "?.data?.message": [
+                        "ul",
+                        {
+                            "class :=": "messages"
+                        },
+                        {
+                            "each": [
+                                "li",
+                                {
+                                    "textContent": "?."
+                                }
+                            ],
+                            "of": "?."
+                        }
+                    ],
+                    "?.data?.Results?.series?.0": [
+                        "section",
+                        {
+                            "class :=": "series"
+                        },
+                        [
+                            [
+                                "h2",
+                                {
+                                    "textContent": "?.seriesID"
+                                }
+                            ],
+                            {
+                                "switch": "?.data?.0?.latest",
+                                "cases": {
+                                    "true": [
+                                        "p",
+                                        {
+                                            "class :=": "latest"
+                                        },
+                                        [
+                                            [
+                                                "span",
+                                                {
+                                                    "class :=": "value",
+                                                    "textContent": "?.data?.0?.value"
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "?. =&": {
+                                                        "microJoin": [
+                                                            "?.data?.0?.periodName",
+                                                            " ",
+                                                            "?.data?.0?.year",
+                                                            ", the latest"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        ]
+                                    ]
+                                },
+                                "default": null
+                            },
+                            [
+                                "table",
+                                {},
+                                [
+                                    [
+                                        "thead",
+                                        {},
+                                        [
+                                            [
+                                                "tr",
+                                                {},
+                                                [
+                                                    [
+                                                        "th",
+                                                        {
+                                                            "scope :=": "col",
+                                                            "textContent": "Year"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "th",
+                                                        {
+                                                            "scope :=": "col",
+                                                            "textContent": "Period"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "th",
+                                                        {
+                                                            "scope :=": "col",
+                                                            "class :=": "value",
+                                                            "textContent": "Value"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "th",
+                                                        {
+                                                            "scope :=": "col",
+                                                            "textContent": "Notes"
+                                                        }
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ],
+                                    [
+                                        "tbody",
+                                        {},
+                                        {
+                                            "each": [
+                                                "tr",
+                                                {
+                                                    "data-period :=": "?.period"
+                                                },
+                                                [
+                                                    [
+                                                        "td",
+                                                        {
+                                                            "textContent": "?.year"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "td",
+                                                        {
+                                                            "textContent": "?.periodName"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "td",
+                                                        {
+                                                            "class :=": "value",
+                                                            "textContent": "?.value"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "td",
+                                                        {
+                                                            "class :=": "notes"
+                                                        },
+                                                        {
+                                                            "each": [
+                                                                "span",
+                                                                {
+                                                                    "textContent": "?.text"
+                                                                }
+                                                            ],
+                                                            "of": "?.footnotes"
+                                                        }
+                                                    ]
+                                                ]
+                                            ],
+                                            "of": "?.data",
+                                            "empty": [
+                                                "tr",
+                                                {},
+                                                [
+                                                    [
+                                                        "td",
+                                                        {
+                                                            "colspan :=": "4",
+                                                            "class :=": "empty",
+                                                            "textContent": "No data."
+                                                        }
+                                                    ]
+                                                ]
+                                            ]
+                                        }
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                }
+            },
+            "title": "?.route?.id"
+        }
+    ]
+}
