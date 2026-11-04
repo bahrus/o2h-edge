@@ -375,3 +375,110 @@ What it printed (wrangler 4.157.0):
 **When you next publish assign-gingerly:** it carries the reordered exports, along with the `min` / `max` pipes. The reordering changes nothing for consumers but the warnings.
 
 Nothing is committed. Ready for step 4 when you've decided on year ranges (in the path, or named query parameters).
+
+## Bruce's Response V
+
+>  **Next, from the plan:** step 4, year ranges. It needs your call on how the visitor's choice reaches the API. Either the range goes in the path (`/timeseries/data/:id/:start/:end`, mapped to `?startyear={start}&endyear={end}`), or a route lets named query parameters through (`query: ['startyear', 'endyear']`), which a plain GET form could then use.
+
+I prefer that url's involve as little "mapping" as possible, so that if the backend API supports startyear and endyear query string parameters, the UI uses the same exact structure.  
+
+
+
+## Claude's Implementation Notes V: year ranges, with the API's own parameters
+
+**As you prefer: no mapping.** The page's URL is the API's:
+- the page: `…/demo/bls/timeseries/data/LNS14000000?startyear=2010&endyear=2012`;
+- BLS: `<api>/timeseries/data/LNS14000000?startyear=2010&endyear=2012`.
+
+### navigate-gingerly: `query` on an aligned route
+
+```js
+{ pattern: '/timeseries/data/:id', query: ['startyear', 'endyear'], config: series }
+```
+
+- **What passes:** only those names, by the same names; any other parameter is dropped (`api_key=x` never reached the worker). The first value of each is taken, and only when it isn't empty, so a GET form's blank fields just mean "not given".
+- **Where they go:**
+  - **the aligned source URL:** `sourcesFor` appends them in the route's order;
+  - **the VM's `route`,** beside the path's parameters (`?.route?.startyear`), so a form can show them;
+  - **`RouteMatch.query`;**
+  - **the new helpers** `queryOf(route, path)` and `searchOf(match)`.
+- **Checked by `validateApp`,** so a worker checks it at install:
+  - an array of names (`[\w.-]+`), each once;
+  - not a path parameter's name, since both go in `route`;
+  - **only on aligned routes.** A mapped route has no "same URL" to pass them to, so `query` there is refused. If a mapped route ever needs it, `{name}` placeholders filled from the query would be the natural extension.
+- **Installed with the route** (`prepareApp`), so apps without `query` keep their keys.
+- **mirror** sends the worker the path plus only the route's parameters. `onRender`'s `path` includes them, so the status line shows the range. A GET form is intercepted like a link: a same-document navigation, so Back and Forward work across ranges.
+
+**o2h-edge's worker:** passes the request's query string to `matchRoute` (one line in [src/index.ts](../../src/index.ts)). The route's `query` decides what reaches the API, so the worker enforces the same list the page does.
+
+### The BLS demo
+
+- **The series route** has `query: ['startyear', 'endyear']`.
+- **A plain GET form** above the series: "From / to / Show".
+  - Its fields are named `startyear` and `endyear`, with values from `?.route?.startyear`.
+  - **No script, no events:** the worker renders it, and nothing is left pending.
+  - Both fields are `required`: BLS refuses one year alone ("If a startyear is specified then an endyear must be specified too", `REQUEST_FAILED_INVALID_PARAMETERS`), so the browser stops it first.
+- **"The last three years"** is a link back to the bare path, BLS's default.
+- **The hint:** "Without a key, BLS gives up to 10 years at a time", from the FAQ's limits table. The FAQ also says 20 elsewhere; I couldn't test which applies (see below).
+
+### Today's quota is used up
+
+To make fixtures for ranges, I sent BLS three queries:
+
+| Query | BLS's answer |
+|---|---|
+| 2010–2012 | 36 rows |
+| A start year alone | `REQUEST_FAILED_INVALID_PARAMETERS` |
+| 1995–2020 | `REQUEST_NOT_PROCESSED`: "Request could not be serviced, as the daily threshold for total number of requests allocated to the user with registration key has been reached." |
+
+**So this IP's 25 are spent for today,** between my probes and fixtures and any of yours. Until BLS resets, your `wrangler dev` will show that message on every page. **It does show it,** which is issue 1 (errors in a 200) handled for real. I made no further BLS calls. It also means I still don't know what BLS says to a range over its limit; that's for a day with quota.
+
+### Checked
+
+**navigate-gingerly:** 36 tests pass (Node, Chromium, Firefox, WebKit). New:
+- **core:**
+  - only the named parameters pass, the first of each, in the route's order;
+  - blanks are dropped;
+  - values are decoded, then encoded again;
+  - a route without `query` passes nothing;
+  - the VM's `route` gets them;
+  - `validateApp`'s new refusals;
+  - `prepareApp` installs `query`.
+- **mirror:**
+  - a deep link with `?other=x&detail=full` reaches the worker as `?detail=full`;
+  - the fragment's GET form is intercepted (the shell loaded once), and only `detail` goes through.
+
+**o2h-edge `npm test`:** 22 pass. New: through the real worker:
+- only `sort` and `limit` reach the stand-in API (first values);
+- blanks are dropped;
+- the VM's `route` has them;
+- installing an app with `query` on a mapped route is refused (400).
+
+**The demo, against the fixtures, through the worker, in all three browsers:**
+- **The default:** 33 rows, 2024–2026, with "latest", and empty fields.
+- **The form, 2010 to 2012, then Show:**
+  - a same-document navigation;
+  - the URL is `?startyear=2010&endyear=2012`, and the status line says so;
+  - 36 rows and 36 bars, 2010–2012;
+  - no "latest" (none of them is), and the fields keep the years.
+- **One year only:** the browser blocks it, and the URL is unchanged.
+- **A deep link** with `?startyear=1995&endyear=2020&api_key=x`: the worker was asked without `api_key`, and BLS's quota message is shown, with no rows and no chart.
+- **"The last three years":** back to the default, with empty fields.
+- **At 375px:** no horizontal scroll.
+
+**Changed:**
+- **navigate-gingerly:**
+  - routes.ts, app.ts and mirror.ts, and their .js, built;
+  - the types;
+  - the tests' shell and specs;
+  - the README.
+- **Types copies:** in o2h and assign-gingerly.
+- **o2h-edge:**
+  - src/index.ts;
+  - test/edge.test.mjs, where the stand-in API now ignores a query when matching;
+  - demo/bls (app.mjs, app.json, index.html);
+  - the README.
+
+Nothing is committed.
+
+**Next, from the plan:** step 5, caching with the app's own freshness. Today's quota shows why it's needed.

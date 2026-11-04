@@ -305,8 +305,99 @@
         },
         {
             "pattern": "/timeseries/data/:id",
+            "query": [
+                "startyear",
+                "endyear"
+            ],
             "config": {
                 "map": {
+                    "?.route": [
+                        "form",
+                        {
+                            "class :=": "range",
+                            "action :=": {
+                                "join": [
+                                    "timeseries/data/",
+                                    "?.id"
+                                ]
+                            }
+                        },
+                        [
+                            [
+                                "label",
+                                {},
+                                [
+                                    [
+                                        "span",
+                                        {
+                                            "textContent": "From"
+                                        }
+                                    ],
+                                    [
+                                        "input",
+                                        {
+                                            "name :=": "startyear",
+                                            "type :=": "number",
+                                            "inputmode :=": "numeric",
+                                            "min :=": "1913",
+                                            "max :=": "2099",
+                                            "required :=": true,
+                                            "value :=": "?.startyear"
+                                        }
+                                    ]
+                                ]
+                            ],
+                            [
+                                "label",
+                                {},
+                                [
+                                    [
+                                        "span",
+                                        {
+                                            "textContent": "to"
+                                        }
+                                    ],
+                                    [
+                                        "input",
+                                        {
+                                            "name :=": "endyear",
+                                            "type :=": "number",
+                                            "inputmode :=": "numeric",
+                                            "min :=": "1913",
+                                            "max :=": "2099",
+                                            "required :=": true,
+                                            "value :=": "?.endyear"
+                                        }
+                                    ]
+                                ]
+                            ],
+                            [
+                                "button",
+                                {
+                                    "type :=": "submit",
+                                    "textContent": "Show"
+                                }
+                            ],
+                            [
+                                "a",
+                                {
+                                    "href :=": {
+                                        "join": [
+                                            "timeseries/data/",
+                                            "?.id"
+                                        ]
+                                    },
+                                    "textContent": "The last three years"
+                                }
+                            ],
+                            [
+                                "small",
+                                {
+                                    "textContent": "Without a key, BLS gives up to 10 years at a time."
+                                }
+                            ]
+                        ]
+                    ],
                     "?.data?.message": [
                         "ul",
                         {

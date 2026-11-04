@@ -31,7 +31,7 @@ const api = http.createServer((req, res) => {
     // A small shop, for apps: /shop/products, /shop/products/categories, /shop/products/category/<name>, /shop/products/<id>
     if (req.url.startsWith('/shop/')) {
         shopUrls.push(req.url);
-        const path = req.url.slice('/shop'.length);
+        const path = req.url.slice('/shop'.length).split('?')[0];   // shopUrls has the query, if any
         if (path === '/products') return json(products);
         if (path === '/products/categories') return json(['bags', 'hats']);
         const category = /^\/products\/category\/([^/?]+)$/.exec(path)?.[1];
@@ -261,6 +261,24 @@ test('apps: an aligned path renders the API\'s path, with the VM ({ route, ...so
     assert.ok(html.startsWith('<!--?start name="tree"--><article><h2>Tote &lt;bag&gt;</h2><p>9.5</p></article>'), html);
     assert.deepEqual(embeddedOf(html), { data: products[0], route: { id: '1' } });
     assert.deepEqual(shopUrls, ['/shop/products/1'], 'layout: false, and the visitor\'s query string isn\'t passed on');
+});
+
+test('apps: a route\x27s query parameters reach the API by the same names; others don\x27t', async () => {
+    const routes = shopApp().routes.map(r => (r.pattern === '/products/category/:name' ? { ...r, query: ['sort', 'limit'] } : r));
+    const { key, app } = await prepareApp(shopApp({ routes }), prepareO2HTransform);
+    assert.equal((await installApp(key, app)).status, 204);
+    shopUrls.length = 0;
+    const res = await fetch(`${EDGE}/o2h-app/${key}/products/category/bags?secret=x&limit=5&sort=desc&limit=9`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(shopUrls.sort(), ['/shop/products/categories', '/shop/products/category/bags?sort=desc&limit=5']);
+    assert.deepEqual(embeddedOf(await res.text()).route, { name: 'bags', sort: 'desc', limit: '5' });
+    // Blank values (a GET form's empty fields) are dropped
+    shopUrls.length = 0;
+    await (await fetch(`${EDGE}/o2h-app/${key}/products/category/bags?sort=&limit=`)).text();
+    assert.ok(shopUrls.includes('/shop/products/category/bags'), JSON.stringify(shopUrls));
+    // A query on a mapped route is refused at install
+    const mapped = { ...app, routes: [{ ...app.routes[0], query: ['sort'] }] };
+    assert.equal((await installApp(key, mapped)).status, 400);
 });
 
 test('apps: layout and mapped sources, fetched together, and route parameters in the VM', async () => {

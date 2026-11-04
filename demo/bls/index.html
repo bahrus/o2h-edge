@@ -53,6 +53,13 @@
         .flags li { padding: 2px 10px; border-radius: 999px; background: var(--chip); font-size: .85rem; }
         .flags:empty { display: none; }
 
+        /* The years shown: a plain GET form (its fields are the API's parameters) */
+        .range { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 16px; font-size: .9rem; }
+        .range label { color: var(--text); font-size: .9rem; }
+        .range input { width: 6em; }
+        .range button { font: inherit; color: #fff; background: var(--accent); border: 0; border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+        .range small { flex-basis: 100%; color: var(--muted); }
+
         /* One series */
         .series .name { margin: -4px 0 12px; font-size: 1.05rem; }
         .series h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 1.3rem; }
@@ -66,7 +73,7 @@
             flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent);
             height: calc(6% + (var(--v) - var(--low)) / max(var(--high) - var(--low), 0.000001) * 94%);
         }
-        .bars li:first-child { background: var(--accent); }   /* the latest */
+        .bars li:first-child { background: var(--accent); }   /* the newest shown */
         .bars li[data-period="M13"] { display: none; }        /* an annual average isn't a month */
         .chart:has(.bars:empty) { display: none; }            /* no data (e.g. an invalid series) */
         .chart figcaption { display: flex; justify-content: space-between; margin-top: 6px; font-size: .8rem; color: var(--muted); }

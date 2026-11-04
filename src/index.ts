@@ -104,7 +104,8 @@ export default {
                 return refused ? errorResponse(400, refused) : new Response(null, { status: 204, headers: CORS });
             }
             if (request.method !== 'GET') return errorResponse(405, "render an app's path with GET");
-            return withCors(await renderAppPath(env, key, path, url.hostname));
+            // The query string goes along: the route keeps only the parameters it lets through (its `query`)
+            return withCors(await renderAppPath(env, key, path + url.search, url.hostname));
         }
 
         if (url.pathname === '/') {
