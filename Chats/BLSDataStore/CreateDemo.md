@@ -206,3 +206,80 @@ The pages were checked against the fixtures, through the worker, in Chromium, Fi
 Nothing in the libraries changed. Nothing is committed.
 
 **Next, step 2: the chart.** Bars drawn by CSS from the values need the series' min and max. I'd add `max` / `min` data pipes to assign-gingerly, beside `sum`. They would skip non-numbers like `"-"`.
+
+## Bruce's Response II
+
+Please proceed to charts and max/min data pipes.
+
+## Claude's Implementation Notes II: the chart, and `min` / `max` data pipes
+
+### assign-gingerly: `min` and `max`
+
+**The descriptors:** `{ min: '?.path' }` and `{ max: '?.path' }`, the smallest or largest of an array's values at a path per element.
+- **What counts:** only numbers and numeric strings. An element whose path leads nowhere, to a blank, or to anything else (`"-"`) is skipped.
+  - **Unlike `sum`:** for a total, a blank adding 0 is harmless, but a blank taken as 0 would wrongly become the minimum.
+- **No numbers at all, or not an array:** `undefined`, so nothing is rendered.
+- **One path only:** a product, as `sum` takes, means nothing for a minimum.
+- **Errors:** a bad path throws at `dataPipes()`, as the other descriptors do.
+
+**Where:**
+- [pipes/dataPipes.ts](../../../assign-gingerly/pipes/dataPipes.ts), as `extremePipe`, beside `sumPipe`. Your watcher rebuilt the `.js`.
+- `MinPipeDescriptor` / `MaxPipeDescriptor`, added to the `PipeDescriptor` union in the types submodule, in the assign-gingerly, o2h and navigate-gingerly checkouts.
+- [docs/pipes.md](../../../assign-gingerly/docs/pipes.md): a table row, a "chart's scale" example, and the "deliberately small" bullet.
+- A test in `tests/pure-modules.spec.ts`. It covers BLS-shaped data (`"4.2"`, `"-"`, `3.9`, `{}`, `""`, `null`), a plain array of numbers, the `undefined` cases, `structuredClone`, and the errors.
+
+### The chart (demo/bls)
+
+- **[app.mjs](../../demo/bls/app.mjs):**
+  - `options.pipes`: `low: { min: '?.value' }` and `high: { max: '?.value' }`.
+  - In the series view: `<figure style="--low: ${'?.data?.low'}; --high: ${'?.data?.high'}">`, with an `<ol class="bars" ${each('?.data')}>` of `<li style="--v: ${'?.value'}" title="September 2026: 4.2">`.
+  - A caption gives the lowest and highest values.
+- **[index.html](../../demo/bls/index.html):**
+  - each bar's height is `calc(6% + (v − low) / (high − low) × 94%)`, with a small floor so the lowest still shows, guarded against `high = low`;
+  - `flex-direction: row-reverse`, since the data is newest first; the latest bar is in the accent color;
+  - `M13` bars are hidden;
+  - the chart is hidden when there are no bars (`:has(.bars:empty)`).
+- **A `"-"`** makes that bar's `calc()` invalid, so its height falls back to `auto`: zero, a gap. No filtering was needed.
+- **Accessibility:** the bars are `aria-hidden`. The table has the numbers, and the caption the range.
+- **Kept off the floor:** the scale runs from the series' lowest value, not zero, so the caption states it. For the unemployment rate (3.7 to 4.5), bars from zero would all look the same.
+
+**The scale goes on the wrapper, not on the list.** I first wrote the docs example with `--low` / `--high` on the element carrying `each` itself. The demo uses a wrapper (`<figure>`) for the scale and puts `each` on the list inside, and that's the version I verified. So I changed the docs to match.
+
+### Checked
+
+The chart was checked against the fixtures, through the worker, in Chromium, Firefox and WebKit.
+
+**LNS14000000 and CUUR0000SA0:**
+- **In the worker's HTML:** the chart is there (`--low: 3.7; --high: 4.5`, and `--v` per bar), so there's no page-side work: "rendered by the worker", with nothing finished on the page.
+- **The bars:** 33.
+  - **The tallest** is the high: November 2025, 4.5; CPI's is September 2026, 336.940.
+  - **The lowest** keeps its floor (10px).
+  - **One gap:** October 2025, "-".
+  - **The latest** is at the right.
+- **Errors:** none on the page or in the console.
+
+**The invalid series:** no bars, and the chart is hidden (checked in Chromium).
+
+**At 375px (Chromium):** no horizontal scroll, and 33 thin bars still read fine.
+
+**Not changed:**
+- **o2h:** the descriptors travel to the worker through `pipeDescriptorOf`, as `sum`'s do.
+- **navigate-gingerly**, apart from the types copy.
+
+**Before deploying,** the worker needs this assign-gingerly. The workspace's `wrangler.jsonc` alias already uses the sibling repo. Elsewhere, it needs a published version.
+
+**Changed:**
+- **assign-gingerly:**
+  - `pipes/dataPipes.ts`;
+  - the types;
+  - `docs/pipes.md`;
+  - the test.
+- **o2h and navigate-gingerly:** the types copy.
+- **o2h-edge:**
+  - `demo/bls/app.mjs`, and `app.json`, rebuilt;
+  - `index.html`;
+  - the README.
+
+Nothing is committed.
+
+**Next, from the plan:** step 3, names for series IDs (a lookup, or the join). Or step 4, year ranges, which raises the question of letting the visitor's query parameters through.

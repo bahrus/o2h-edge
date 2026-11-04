@@ -339,6 +339,81 @@
                                 "default": null
                             },
                             [
+                                "figure",
+                                {
+                                    "class :=": "chart",
+                                    "style :=": {
+                                        "join": [
+                                            "--low: ",
+                                            "?.data?.low",
+                                            "; --high: ",
+                                            "?.data?.high"
+                                        ]
+                                    }
+                                },
+                                [
+                                    [
+                                        "ol",
+                                        {
+                                            "class :=": "bars",
+                                            "aria-hidden :=": "true"
+                                        },
+                                        {
+                                            "each": [
+                                                "li",
+                                                {
+                                                    "style :=": {
+                                                        "join": [
+                                                            "--v: ",
+                                                            "?.value"
+                                                        ]
+                                                    },
+                                                    "data-period :=": "?.period",
+                                                    "title :=": {
+                                                        "join": [
+                                                            "?.periodName",
+                                                            " ",
+                                                            "?.year",
+                                                            ": ",
+                                                            "?.value"
+                                                        ]
+                                                    }
+                                                }
+                                            ],
+                                            "of": "?.data"
+                                        }
+                                    ],
+                                    [
+                                        "figcaption",
+                                        {},
+                                        [
+                                            [
+                                                "span",
+                                                {
+                                                    "?. =&": {
+                                                        "microJoin": [
+                                                            "Lowest ",
+                                                            "?.data?.low"
+                                                        ]
+                                                    }
+                                                }
+                                            ],
+                                            [
+                                                "span",
+                                                {
+                                                    "?. =&": {
+                                                        "microJoin": [
+                                                            "highest ",
+                                                            "?.data?.high"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ],
+                            [
                                 "table",
                                 {},
                                 [
@@ -454,5 +529,15 @@
             },
             "title": "?.route?.id"
         }
-    ]
+    ],
+    "options": {
+        "pipes": {
+            "low": {
+                "min": "?.value"
+            },
+            "high": {
+                "max": "?.value"
+            }
+        }
+    }
 }

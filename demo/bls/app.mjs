@@ -60,6 +60,8 @@ const survey = {
 
 // One series ({ seriesID, data: [{ year, period, periodName, latest, value, footnotes: [{ code, text }] }] }), newest
 // first. Values are strings; a missing one is "-". footnotes is [{}] when there are none (an empty item, hidden by CSS).
+// The chart: a bar per value, scaled by CSS between the series' lowest and highest (the low / high pipes). A "-"
+// makes its bar's height invalid, so it's a gap. The bars are hidden from assistive tech: the table has the numbers.
 const series = {
     map: {
         '?.data?.message': messages,
@@ -71,6 +73,12 @@ const series = {
                         <span class="value">${'?.data?.0?.value'}</span>
                         <span>${'?.data?.0?.periodName'} ${'?.data?.0?.year'}, the latest</span>
                     </p>` }, null)}
+                <figure class="chart" style="--low: ${'?.data?.low'}; --high: ${'?.data?.high'}">
+                    <ol class="bars" aria-hidden="true" ${each('?.data')}>
+                        <li style="--v: ${'?.value'}" data-period=${'?.period'} title="${'?.periodName'} ${'?.year'}: ${'?.value'}"></li>
+                    </ol>
+                    <figcaption><span>Lowest ${'?.data?.low'}</span> <span>highest ${'?.data?.high'}</span></figcaption>
+                </figure>
                 <table>
                     <thead><tr><th scope="col">Year</th><th scope="col">Period</th><th scope="col" class="value">Value</th><th scope="col">Notes</th></tr></thead>
                     <tbody ${each('?.data', { empty: tree`<tr><td colspan="4" class="empty">No data.</td></tr>` })}>
@@ -97,6 +105,13 @@ export const app = {
         { pattern: '/surveys/:abbr', sources: { survey: 'surveys/{abbr}', popular: 'timeseries/popular?survey={abbr}' }, config: survey, title: '?.survey?.Results?.survey?.0?.survey_name' },
         { pattern: '/timeseries/data/:id', config: series, title: '?.route?.id' },
     ],
+    options: {
+        // Data pipes, so the worker renders the chart: a series' range (values are strings; "-" is skipped)
+        pipes: {
+            low: { min: '?.value' },
+            high: { max: '?.value' },
+        },
+    },
 };
 
 /** The app as JSON. Throws for code, which JSON would silently drop: reference it as { import, export } instead. */

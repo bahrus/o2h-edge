@@ -54,6 +54,18 @@
         .series h2 { margin: 0 0 8px; font-family: ui-monospace, monospace; font-size: 1.3rem; }
         .latest { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 0 0 16px; color: var(--muted); }
         .latest .value { font-size: 2.2rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+        /* The chart: newest first in the data, so the row is reversed; each bar's height is its value between the
+           series' lowest and highest (custom properties set by the worker), from a small floor so the lowest shows */
+        .chart { margin: 0 0 16px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+        .bars { display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 2px; height: 160px; margin: 0; padding: 0; list-style: none; }
+        .bars li {
+            flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent);
+            height: calc(6% + (var(--v) - var(--low)) / max(var(--high) - var(--low), 0.000001) * 94%);
+        }
+        .bars li:first-child { background: var(--accent); }   /* the latest */
+        .bars li[data-period="M13"] { display: none; }        /* an annual average isn't a month */
+        .chart:has(.bars:empty) { display: none; }            /* no data (e.g. an invalid series) */
+        .chart figcaption { display: flex; justify-content: space-between; margin-top: 6px; font-size: .8rem; color: var(--muted); }
         table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
         th, td { padding: 6px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
         th { font-size: .8rem; color: var(--muted); font-weight: 600; }
