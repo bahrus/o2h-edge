@@ -342,3 +342,36 @@ Checked against the fixtures, through the worker, in Chromium, Firefox and WebKi
 Nothing is committed.
 
 **Next, from the plan:** step 4, year ranges. It needs your call on how the visitor's choice reaches the API. Either the range goes in the path (`/timeseries/data/:id/:start/:end`, mapped to `?startyear={start}&endyear={end}`), or a route lets named query parameters through (`query: ['startyear', 'endyear']`), which a plain GET form could then use.
+
+## Bruce's Response IV
+
+Before moving on to step 4, can you look into all the warnings that get emitted when starting up wrangler dev in o2h-edge?  Are those easy to fix?
+## Claude's Response IV: wrangler dev's warnings
+
+**Yes, both were easy, and `wrangler dev` now starts with none.**
+
+What it printed (wrangler 4.157.0):
+
+1. **54 copies of one warning:** `The condition "types" here will never be used as it comes after "default"`.
+   - **Where:** 50 from assign-gingerly's package.json and 4 from inferencer's.
+   - **Why:** each `exports` entry listed `"default"` before `"types"`. Conditions are matched in order, and `default` matches everything, so `types` was never reached.
+   - **Harmless for TypeScript:** it still found the `.ts` beside the `.js`. The warning was esbuild, bundling the worker through the `file:` link.
+   - **Fixed:** swapped the pairs in place: 50 in [assign-gingerly/package.json](../../../assign-gingerly/package.json) and 4 in [inferencer/package.json](../../../assign-gingerly/inferencer/package.json). It's a key-order change only, with the formatting kept, and both files still parse. (`./types/treeTypes.js` has `types` only, so it was already fine.)
+2. **"Your types might be out of date. Re-run `wrangler types`".**
+   - **Fixed:** `npm run types` regenerated [worker-configuration.d.ts](../../worker-configuration.d.ts).
+   - **What changed:** only Cloudflare's runtime declarations, from the newer wrangler (e.g. `mapVirtualHost`, `enableInternet?`, `streamDiagEvent?`). Nothing came from this repo's bindings. `npm run check` passes.
+3. **The "running in an AI agent" lines,** listing the Local Explorer API, appear only because I started it. You won't see them.
+
+**Checked:**
+- **A second start:** 0 warnings, ready, and `GET /` 200.
+- **o2h-edge's `npm test`:** 21 of 21 pass, the worker bundled through the reordered exports.
+
+**One left, not from `wrangler dev`:** `npm run types` itself now says "Action required: Install @types/node", since `nodejs_compat` is on. That's the same gap that makes `node:fs` / `import.meta.main` unresolved in the demos' app.mjs files. **Not done:** it's a new dev dependency (`npm i -D @types/node`), so it's your call.
+
+**Changed:**
+- **assign-gingerly:** package.json, and inferencer's package.json (inferencer is its own submodule, so that's a separate commit there);
+- **o2h-edge:** worker-configuration.d.ts.
+
+**When you next publish assign-gingerly:** it carries the reordered exports, along with the `min` / `max` pipes. The reordering changes nothing for consumers but the warnings.
+
+Nothing is committed. Ready for step 4 when you've decided on year ranges (in the path, or named query parameters).
