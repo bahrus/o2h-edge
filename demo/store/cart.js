@@ -3,7 +3,6 @@
 // The worker never sees it. The badge's count and the total are the app's sum data pipes (itemCount, total).
 import { tree, each } from 'assign-gingerly/DX/tree.js';
 import { assignFromAsync } from 'assign-gingerly/assignFromAsync.js';
-import { dataPipes } from 'assign-gingerly/pipes/dataPipes.js';
 
 // A quantity button: dispatches cart-change for its line (resolved against the line when the button is bound)
 const change = by => ({ get: { dispatch: { type: 'cart-change', detail: { id: '?.id', by } } } });
@@ -44,7 +43,6 @@ const config = {
  * `pipes`: the app's pipe descriptors (usd, itemCount, total). `onChange(lines, line)` is told what changed.
  */
 export function cart({ into, pipes, key = 'fake-store-cart', onChange }) {
-    const made = dataPipes(pipes);
     let lines = load();
 
     function load() {
@@ -56,7 +54,7 @@ export function cart({ into, pipes, key = 'fake-store-cart', onChange }) {
         }
     }
     function render() {
-        return assignFromAsync(into, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: { lines }, pipes: made });
+        return assignFromAsync(into, { '?. =>': { do: 'builtIns.tree', ...config } }, { from: { lines }, pipes });
     }
     function save(line) {
         try {
