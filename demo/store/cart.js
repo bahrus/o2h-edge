@@ -1,5 +1,5 @@
 // The visitor's cart: lines kept in localStorage, rendered on this page (builtIns.tree), and changed by the events the
-// store's buttons dispatch: cart-add (a product's line, from its page) and cart-change ({ id, by }, from the cart).
+// store's buttons dispatch: cart-add (a product's line, with a quantity, from its page) and cart-change ({ id, by }, from the cart).
 // The worker never sees it. The badge's count and the total are the app's sum data pipes (itemCount, total).
 import { tree, each } from 'assign-gingerly/DX/tree.js';
 import { assignFromAsync } from 'assign-gingerly/assignFromAsync.js';
@@ -67,8 +67,9 @@ export function cart({ into, pipes, key = 'fake-store-cart', onChange }) {
     document.addEventListener('cart-add', ({ detail }) => {
         if (detail?.id == null) return;
         const line = lines.find(l => l.id === detail.id);
-        if (line) line.quantity++;
-        else lines = [...lines, { ...detail, quantity: 1 }];
+        const { quantity = 1 } = detail;
+        if (line) line.quantity += quantity;
+        else lines = [...lines, { ...detail, quantity }];
         save(line ?? lines.at(-1));
     });
     document.addEventListener('cart-change', ({ detail }) => {

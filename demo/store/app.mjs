@@ -39,24 +39,28 @@ const grid = {
     },
 };
 
-// Add to cart: the button dispatches cart-add, with the product as a cart line, for the page's cart (cart.js).
-// Data only: the get block is resolved against the product when hydration binds the button. The worker can't
-// bind events, so it marks the button data-pending, and it's hidden (options.style) until the page binds it.
-const addToCart = { get: { dispatch: { type: 'cart-add', detail: { id: '?.id', title: '?.title', price: '?.price', image: '?.image' } } } };
-
-// { id, title, price, description, category, image, rating }
+// { id, title, price, description, category, image, rating }. How many to add is state, so it needs code: the manager
+// (productView.js) is only named here, so this stays JSON. The worker renders the product, and leaves the quantity and
+// its buttons to the page: it can't bind events, so they're data-pending, and hidden (options.style) until they're bound.
 const product = {
     map: {
         categories,
         data: tree`
-            <article class="detail">
+            <article class="detail" ish="product-view">
                 <img src=${'?.image'} alt=${'?.title'} style="view-transition-name: product-${'?.id'}">
                 <div class="info">
                     <h2>${'?.title'}</h2>
                     <p class="category">${'?.category'}</p>
                     <p class="price">${'?.price?.usd'}</p>
                     ${stars('?.rating')}
-                    <button type="button" class="add" @click=${addToCart}>Add to cart</button>
+                    <div class="buy">
+                        <div class="stepper" role="group" aria-label="Quantity">
+                            <button type="button" aria-label="One less" @click=${{ call: 'less' }}>−</button>
+                            <output>${'?.quantity'}</output>
+                            <button type="button" aria-label="One more" @click=${{ call: 'more' }}>+</button>
+                        </div>
+                        <button type="button" class="add" @click=${{ call: 'add' }}>Add ${'?.lineTotal?.usd'} to cart</button>
+                    </div>
                     <p class="description">${'?.description'}</p>
                 </div>
             </article>`,
@@ -85,6 +89,8 @@ export const app = {
             subtotal: { sum: ['?.quantity', '?.price'] },
             total: { chain: ['subtotal', 'usd'] },
         },
+        // Code, by reference, relative to this app: the page loads it, and the worker gets a stand-in
+        managers: { 'product-view': { import: './productView.js', export: 'ProductView' } },
         style: true,
     },
 };

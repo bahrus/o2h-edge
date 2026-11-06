@@ -65,7 +65,11 @@
         .detail .rating { font-size: .9rem; }
         .detail .description { margin: 8px 0 0; }
 
-        /* Add to cart: worker-rendered, data-pending (so hidden) until the page binds its click */
+        /* The quantity and Add to cart: worker-rendered, data-pending (so hidden) until the page binds them */
+        .buy { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; min-height: 40px; }
+        .stepper { display: flex; gap: 6px; align-items: center; }
+        .stepper button { font: inherit; font-weight: 600; width: 32px; height: 32px; color: inherit; background: none; border: 1px solid currentColor; border-radius: 50%; cursor: pointer; }
+        .stepper output { min-width: 1.5em; text-align: center; font-variant-numeric: tabular-nums; }
         .add { justify-self: start; font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
 
         /* The cart: rendered on this page (cart.js), from localStorage */

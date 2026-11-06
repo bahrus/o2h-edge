@@ -433,7 +433,10 @@
                         }
                     ],
                     "data": [
-                        "article",
+                        {
+                            "tag": "article",
+                            "ish": "product-view"
+                        },
                         {
                             "class :=": "detail"
                         },
@@ -508,26 +511,70 @@
                                         ]
                                     ],
                                     [
-                                        "button",
+                                        "div",
                                         {
-                                            "type :=": "button",
-                                            "class :=": "add",
-                                            " +=": {
-                                                "on": "click",
-                                                "get": {
-                                                    "dispatch": {
-                                                        "type": "cart-add",
-                                                        "detail": {
-                                                            "id": "?.id",
-                                                            "title": "?.title",
-                                                            "price": "?.price",
-                                                            "image": "?.image"
+                                            "class :=": "buy"
+                                        },
+                                        [
+                                            [
+                                                "div",
+                                                {
+                                                    "class :=": "stepper",
+                                                    "role :=": "group",
+                                                    "aria-label :=": "Quantity"
+                                                },
+                                                [
+                                                    [
+                                                        "button",
+                                                        {
+                                                            "type :=": "button",
+                                                            "aria-label :=": "One less",
+                                                            " +=": {
+                                                                "on": "click",
+                                                                "call": "less"
+                                                            },
+                                                            "textContent": "−"
                                                         }
+                                                    ],
+                                                    [
+                                                        "output",
+                                                        {
+                                                            "textContent": "?.quantity"
+                                                        }
+                                                    ],
+                                                    [
+                                                        "button",
+                                                        {
+                                                            "type :=": "button",
+                                                            "aria-label :=": "One more",
+                                                            " +=": {
+                                                                "on": "click",
+                                                                "call": "more"
+                                                            },
+                                                            "textContent": "+"
+                                                        }
+                                                    ]
+                                                ]
+                                            ],
+                                            [
+                                                "button",
+                                                {
+                                                    "type :=": "button",
+                                                    "class :=": "add",
+                                                    " +=": {
+                                                        "on": "click",
+                                                        "call": "add"
+                                                    },
+                                                    "?. =&": {
+                                                        "microJoin": [
+                                                            "Add ",
+                                                            "?.lineTotal?.usd",
+                                                            " to cart"
+                                                        ]
                                                     }
                                                 }
-                                            },
-                                            "textContent": "Add to cart"
-                                        }
+                                            ]
+                                        ]
                                     ],
                                     [
                                         "p",
@@ -569,6 +616,12 @@
                     "subtotal",
                     "usd"
                 ]
+            }
+        },
+        "managers": {
+            "product-view": {
+                "import": "./productView.js",
+                "export": "ProductView"
             }
         },
         "style": true
