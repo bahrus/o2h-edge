@@ -482,3 +482,57 @@ To make fixtures for ranges, I sent BLS three queries:
 Nothing is committed.
 
 **Next, from the plan:** step 5, caching with the app's own freshness. Today's quota shows why it's needed.
+
+## Bruce's Response VI
+
+I have now acquired an API key for use o the BLS queries.  Does it make sense for me to ask you to add a check i the api is in storage, and if not optionally ask for it to remove restrictions?
+
+## Claude's Thoughts VI: a key the visitor brings
+
+**Yes, it makes sense.** It's also the one form of key that keeps our rule: the key sits in neither the worker nor the pages' source. It stays in the visitor's own browser and passes through the worker only on the way to BLS. It's a different option from Phase II's worker secret, and the two can coexist. More on that below.
+
+### How it would look
+
+- **The page:** a small "BLS key" disclosure under the form, closed by default:
+  - **No key stored:** "Without a key, BLS allows 25 queries a day and 10 years. Have a key? [field] Save". There's a link to BLS's registration page.
+  - **A key stored:** "Using your key (…a1b2) · Remove". The hint changes to 20 years.
+  - Stored in `localStorage`. The page never asks unprompted, so keyless visitors see what they see today.
+- **How it travels:** a request header (e.g. `X-O2H-Upstream-Key`), **never the URL.** A key in the URL would end up in history, in shared links, in `Referer` and in logs. That's the same reason the worker already drops `?api_key=` from deep links.
+- **What the worker does with it:** the app declares how its API takes a key, for example `"apiKey": { "param": "registrationkey" }` in app.json. Only on that app's own API origin, the worker adds `registrationkey=<key>` to the upstream URL.
+  - It never adds the key for any other origin, which matters because apps are installed by anyone.
+  - It never stores or logs the key.
+  - Upstream errors already go back without the URL (`guardedFetch` reports only status and text), so the key can't leak that way.
+
+### What it changes
+
+| | Keyless | With a key |
+|---|---|---|
+| Queries a day | 25 **per IP** (Cloudflare's shared address once deployed) | 500 **per key** |
+| Years per query | 10 | 20 |
+| Series per query | 25 | 50 |
+| `catalog` titles | no | yes, so `seriesName` could come from BLS instead of our hand-written table |
+
+### What it needs
+
+1. **navigate-gingerly `mirror`:** a way to add headers to its worker fetch. Today it's a bare `fetch(workerURL(...), { signal })`. A `headers` option, or a function called per request so a key saved mid-session applies at once.
+2. **o2h-edge:** the app's `apiKey` declaration, checked when the app is installed. The worker reads the header and adds the param on the app's origin only. The CORS preflight must allow the header.
+3. **demo/bls:** the disclosure, `localStorage` (wrapped in try/catch, for private windows), and the hint that switches between 10 and 20 years.
+4. **Tests:** against the stand-in API.
+   - The key reaches upstream as `registrationkey`, only for the app's own origin.
+   - It isn't sent for any other origin.
+   - It never appears in a response or an `X-O2H-Error`.
+   - A page without a key behaves exactly as now.
+5. **One real BLS call with your key,** to confirm that v2 GET takes `registrationkey` in the query string as its docs say. I'd do this only once you say so, since it spends your quota.
+
+### Trade-offs
+
+- **It helps only visitors who have a key.** Others still share the 25 a day per IP, so caching (step 5) is still needed for the public demo.
+- **Caching and keys:** when step 5 caches responses, the key shouldn't be part of the cache key. The data is the same public data either way. A side effect: a keyless visitor could be served a 20-year range that a keyed visitor fetched earlier. I think that's fine, even welcome.
+- **`localStorage`** can be read by any script on the page's origin. For a demo whose pages contain only our own scripts, that's acceptable. A real site would want `sessionStorage`, or a key typed in each time.
+- **Against Phase II's worker secret:** a worker secret would make every visitor benefit, but they'd all spend *your* 500 a day. And since anyone can install an app, the secret would have to be tied to specific app keys, or anyone's app could spend it too. The visitor-held key avoids both problems. My suggestion is to build this first and keep the worker secret as a later option.
+
+### Questions
+
+1. Should I go ahead with the visitor-held key as above?
+2. Should the stored key last (`localStorage`) or end with the tab (`sessionStorage`, as `transforms.html` does for the admin token)? I'd use `localStorage`, with the visible "Remove" link.
+3. May I make the one BLS call with your key once the code is in place? You'd paste it into the page yourself; I wouldn't need to see it.
