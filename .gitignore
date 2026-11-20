@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 # Wrangler: local dev state, and local secrets
 .wrangler/
 .dev.vars*
+
+# API Keys
+keys/
