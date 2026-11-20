@@ -17,7 +17,7 @@
 import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import type { O2HTransform } from 'o2h/worker/core.js';
 import { appKey, validateApp } from 'navigate-gingerly/app.js';
-import { composeVM, matchRoute, sourcesFor } from 'navigate-gingerly/routes.js';
+import { composeVM, matchRoute, sourcesFor, withApiKey } from 'navigate-gingerly/routes.js';
 import type { InstalledApp } from 'navigate-gingerly/routes.js';
 import { errorResponse, guardedFetch, refuseApiUrl } from './guards.js';
 
@@ -97,8 +97,12 @@ async function getApp(env: Env, key: string): Promise<InstalledApp<O2HTransform>
     return app;
 }
 
-/** Render a path of an installed app (see the module comment). */
-export async function renderAppPath(env: Env, key: string, path: string, requestHost: string): Promise<Response> {
+/**
+ * Render a path of an installed app (see the module comment). `apiKey` is the visitor's own key for the app's API
+ * (sent by the page in a header): when the app declares `apiKey`, it's added to the sources under the app's `api`,
+ * and nowhere else. It's never stored, and kept out of what's sent back.
+ */
+export async function renderAppPath(env: Env, key: string, path: string, requestHost: string, apiKey?: string | null): Promise<Response> {
     const app = await getApp(env, key);
     if (!app) return errorResponse(404, `no app "${key}"`);
     const match = matchRoute(app, path);
@@ -117,12 +121,14 @@ export async function renderAppPath(env: Env, key: string, path: string, request
     // Every source, in parallel, through the guards; the first that fails is the answer
     const fetchUpstream = guardedFetch(env);
     const names = Object.keys(urls);
-    const responses = await Promise.all(names.map(name => fetchUpstream(urls[name])));
+    const responses = await Promise.all(names.map(name => fetchUpstream(withApiKey(app, urls[name], apiKey))));
     const results: Record<string, unknown> = {};
     for (const [i, response] of responses.entries()) {
         if (!response.ok) {
             const { error } = await response.json<{ error?: string }>().catch(() => ({ error: response.statusText }));
-            return errorResponse(response.status, `the source "${names[i]}": ${error ?? response.status}`);
+            // An error could quote the URL it was fetching, and with it the key
+            const said = apiKey ? String(error ?? response.status).replaceAll(apiKey, '…') : error ?? response.status;
+            return errorResponse(response.status, `the source "${names[i]}": ${said}`);
         }
         try {
             results[names[i]] = await response.json();

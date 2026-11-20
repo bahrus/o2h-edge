@@ -22,13 +22,14 @@ import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import { errorResponse, guardedFetch, refuseApiUrl, refuseListing } from './guards.js';
 import { getTransform, getTransformJson, listTransforms, putTransform } from './transforms.js';
 import { getAppJson, putApp, renderAppPath } from './apps.js';
+import { API_KEY_HEADER } from 'navigate-gingerly/routes.js';
 
 const APP_PATH = /^\/o2h-app\/([^/]+)(\/.*)?$/;
 
 const CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': `Content-Type, Authorization, ${API_KEY_HEADER}`,
     'Access-Control-Expose-Headers': 'X-O2H-Error',
 };
 
@@ -105,7 +106,8 @@ export default {
             }
             if (request.method !== 'GET') return errorResponse(405, "render an app's path with GET");
             // The query string goes along: the route keeps only the parameters it lets through (its `query`)
-            return withCors(await renderAppPath(env, key, path + url.search, url.hostname));
+            // A visitor's own key for the app's API comes in a header (never the URL); used only if the app takes one
+            return withCors(await renderAppPath(env, key, path + url.search, url.hostname, request.headers.get(API_KEY_HEADER)));
         }
 
         if (url.pathname === '/') {

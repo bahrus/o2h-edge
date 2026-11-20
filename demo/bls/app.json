@@ -1,5 +1,8 @@
 {
     "api": "https://api.bls.gov/publicAPI/v2",
+    "apiKey": {
+        "param": "registrationkey"
+    },
     "routes": [
         {
             "pattern": "/",
@@ -393,7 +396,15 @@
                             [
                                 "small",
                                 {
+                                    "class :=": "keyless",
                                     "textContent": "Without a key, BLS gives up to 10 years at a time."
+                                }
+                            ],
+                            [
+                                "small",
+                                {
+                                    "class :=": "keyed",
+                                    "textContent": "With your key, BLS gives up to 20 years at a time."
                                 }
                             ]
                         ]

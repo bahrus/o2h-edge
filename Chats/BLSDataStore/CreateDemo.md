@@ -536,3 +536,83 @@ I have now acquired an API key for use o the BLS queries.  Does it make sense fo
 1. Should I go ahead with the visitor-held key as above?
 2. Should the stored key last (`localStorage`) or end with the tab (`sessionStorage`, as `transforms.html` does for the admin token)? I'd use `localStorage`, with the visible "Remove" link.
 3. May I make the one BLS call with your key once the code is in place? You'd paste it into the page yourself; I wouldn't need to see it.
+
+## Bruce's Response VII
+
+> 1. Should I go ahead with the visitor-held key as above?
+
+Yes, please
+
+> 2. Should the stored key last (`localStorage`) 
+
+Yes, local storage
+
+> 3. May I make the one BLS call with your key once the code is in place?
+
+I added the key [here](../../keys/BLS.txt).  Feel free to use.  I can also paste it into the page itself.
+## Claude's Implementation Notes VII: a key the visitor brings
+
+Built as proposed in VI, with `localStorage`.
+
+### How it works
+
+- **The app declares how its API takes a key:** `apiKey: { param: 'registrationkey' }` in app.mjs, installed with the app.
+  - `validateApp` refuses an `apiKey` without an `api`.
+  - It also refuses an app where a route's `query` names the key's parameter. Such a route would take the key from the page's URL.
+- **The page:** a "BLS key: none" panel under the header, closed by default.
+  - **No key:** a short note on the limits, a link to BLS's registration page, a password field and Save.
+  - **A key saved:** the summary shows its last four characters (`…f846`), and the panel has Remove.
+  - Saving or removing refreshes the page, so the change applies at once.
+  - The range form's hint switches between "10 years" and "20 years", using CSS on `html[data-api-key]`.
+- **mirror** (navigate-gingerly) has a new `apiKey` option: a string, or a function read on each request. The demo passes `() => localStorage.getItem('bls-registrationkey')`.
+  - The key goes to the worker in the `X-O2H-Api-Key` header, and only when the app declares `apiKey`.
+  - It's never in a URL.
+- **The worker** reads the header and adds the key with `withApiKey` (navigate-gingerly's routes.ts), which both sides share.
+  - The key is added only to source URLs under the app's `api`: same origin, and under its path. `/v20` doesn't count as under `/v2`.
+  - A `registrationkey` already in the URL is replaced, not doubled.
+  - The key is never stored.
+  - If an upstream error quotes the key, it's replaced with `…`.
+  - The CORS preflight now allows the header.
+
+### The call with your key
+
+I made **one** real BLS call: `timeseries/data/CUUR0000SA0?startyear=2000&endyear=2019`. Every other worker request in that check was stubbed.
+
+- The key went in the header, and BLS answered with no messages: **240 rows, 2000 to 2019, 20 years.** Without a key, BLS allows 10.
+- The key wasn't in the page's URL, in the page's HTML, or in `wrangler dev`'s log.
+- After Remove, the next request went without the header, and storage was empty.
+- At 375px, with the panel open, there's no horizontal scroll.
+
+### Checked
+
+- **navigate-gingerly:** 40 tests pass (Node, Chromium, Firefox, WebKit). New tests:
+  - `validateApp`'s `apiKey` refusals;
+  - `prepareApp` installs `apiKey` (just `param`);
+  - `withApiKey` adds the key only under the app's api;
+  - mirror sends the header, reads the key on each request, and never puts it in a URL.
+  - Playwright's browsers had to be reinstalled first (`npx playwright install`): the cached ones were for an older version.
+- **o2h-edge `npm test`:** 23 pass. The new test runs through the real worker:
+  - with the header, the key reaches sources under the app's api, and not a source elsewhere;
+  - the key isn't in the fragment, in the VM, or in a failing source's error;
+  - a key in the page's URL isn't passed on;
+  - an app that doesn't declare `apiKey` ignores the header;
+  - the preflight allows the header.
+  - The suite's requests are close to the worker's rate limit (60 a minute), so this test makes six, and checks the install refusals with `validateApp` directly, which is the same check the worker runs.
+
+### Changed
+
+- **navigate-gingerly:**
+  - routes.ts (`API_KEY_HEADER`, `withApiKey`), app.ts and mirror.ts, and their .js, built;
+  - the types;
+  - the tests' shell and specs;
+  - the README.
+- **Types copies:** in o2h, assign-gingerly, and assign-gingerly/inferencer.
+- **o2h-edge:**
+  - src/index.ts and src/apps.ts;
+  - test/edge.test.mjs;
+  - demo/bls (app.mjs, app.json, index.html);
+  - the README.
+
+`keys/` is in o2h-edge's `.gitignore`, so `BLS.txt` won't be committed. Nothing is committed.
+
+**Next, from the plan:** step 5, caching with the app's own freshness. As said in VI, the key shouldn't be part of the cache key.

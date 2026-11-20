@@ -6,7 +6,7 @@ import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { prepareO2HTransform } from 'o2h/worker/client.js';
-import { prepareApp } from 'navigate-gingerly/app.js';
+import { prepareApp, validateApp } from 'navigate-gingerly/app.js';
 
 // Fresh local state each run: the KV transforms, and the rate limiter's count (the last test uses up its minute)
 const STATE = '.wrangler/test-state';
@@ -20,6 +20,7 @@ const EDGE = `http://localhost:${EDGE_PORT}`;
 // ── The stand-in API ──
 let lastHeaders = {};
 const shopUrls = [];
+const allUrls = [];
 const products = [
     { id: 1, title: 'Tote <bag>', category: 'bags', price: 9.5 },
     { id: 2, title: 'Sun hat', category: 'hats', price: 12 },
@@ -27,6 +28,7 @@ const products = [
 const mission = { name: 'Demo Mission 7', rocket: { name: 'Falcon 9', type: 'rocket' }, note: 'Fuel </script> & <b>loading</b>' };
 const api = http.createServer((req, res) => {
     lastHeaders = req.headers;
+    allUrls.push(req.url);
     const json = body => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
     // A small shop, for apps: /shop/products, /shop/products/categories, /shop/products/category/<name>, /shop/products/<id>
     if (req.url.startsWith('/shop/')) {
@@ -279,6 +281,53 @@ test('apps: a route\x27s query parameters reach the API by the same names; other
     // A query on a mapped route is refused at install
     const mapped = { ...app, routes: [{ ...app.routes[0], query: ['sort'] }] };
     assert.equal((await installApp(key, mapped)).status, 400);
+});
+
+test("apps: a visitor's API key (a header) reaches the app's own API as its parameter, and nothing else", async () => {
+    const KEY_HEADER = 'X-O2H-Api-Key';
+    const secret = 'visitor-key-123';
+    // A mapped route with a source under the app's api and one elsewhere (same origin, outside /shop)
+    const routes = [...shopApp().routes, { pattern: '/both', layout: false, sources: { shop: '/products/categories', other: `${API}/mission` }, config: { map: { other: ['p', '?.name'] } } }];
+    const { key, app } = await prepareApp(shopApp({ apiKey: { param: 'apikey' }, routes }), prepareO2HTransform);
+    assert.deepEqual(app.apiKey, { param: 'apikey' }, 'installed with the app');
+    assert.equal((await installApp(key, app)).status, 204);
+
+    // With the header: under the app's api only
+    allUrls.length = 0;
+    const both = await fetch(`${EDGE}/o2h-app/${key}/both`, { headers: { [KEY_HEADER]: secret } });
+    assert.equal(both.status, 200);
+    const html = await both.text();
+    assert.ok(html.includes('<p>Demo Mission 7</p>'), html);
+    assert.ok(!html.includes(secret), 'the key isn\'t in the fragment or the VM');
+    assert.deepEqual(allUrls.sort(), ['/mission', `/shop/products/categories?apikey=${secret}`]);
+    // An aligned path: the key is added to it
+    allUrls.length = 0;
+    await (await fetch(`${EDGE}/o2h-app/${key}/products/1`, { headers: { [KEY_HEADER]: secret } })).text();
+    assert.deepEqual(allUrls, [`/shop/products/1?apikey=${secret}`]);
+    // A failing source: the error doesn't carry the key
+    const missing = await fetch(`${EDGE}/o2h-app/${key}/products/99`, { headers: { [KEY_HEADER]: secret } });
+    assert.equal(missing.status, 404);
+    assert.ok(!(await missing.text()).includes(secret));
+    // Without the header: no key, as before; in the page's URL: not passed on
+    allUrls.length = 0;
+    await (await fetch(`${EDGE}/o2h-app/${key}/products/1?apikey=from-url`)).text();
+    assert.deepEqual(allUrls, ['/shop/products/1']);
+
+    // An app that doesn't declare apiKey (installed by the tests above): the header is ignored
+    const { key: plainKey } = await prepareApp(shopApp(), prepareO2HTransform);
+    allUrls.length = 0;
+    await (await fetch(`${EDGE}/o2h-app/${plainKey}/products/1`, { headers: { [KEY_HEADER]: secret } })).text();
+    assert.deepEqual(allUrls, ['/shop/products/1']);
+
+    // Refused (by validateApp, which the worker runs on install; the rate limiter's minute is nearly spent here): the
+    // key's parameter in a route's query, where it would come from the page's URL; or an apiKey with no api
+    const leaky = { ...app, routes: app.routes.map(r => (r.pattern === '/products/category/:name' ? { ...r, query: ['apikey'] } : r)) };
+    assert.throws(() => validateApp(leaky), /carries the API key/);
+    assert.throws(() => validateApp({ apiKey: { param: 'apikey' }, routes: [] }), /apiKey needs the app's api/);
+
+    // The preflight lets the header through
+    const preflight = await fetch(`${EDGE}/o2h-app/${key}/products/1`, { method: 'OPTIONS' });
+    assert.match(preflight.headers.get('Access-Control-Allow-Headers'), /X-O2H-Api-Key/);
 });
 
 test('apps: layout and mapped sources, fetched together, and route parameters in the VM', async () => {

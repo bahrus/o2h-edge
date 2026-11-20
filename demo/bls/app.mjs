@@ -1,7 +1,8 @@
 //@ts-check
-// The BLS Public Data API (v2, keyless), as a navigate-gingerly app: paths are the API's paths (surveys, surveys/CU,
+// The BLS Public Data API (v2), as a navigate-gingerly app: paths are the API's paths (surveys, surveys/CU,
 // timeseries/data/CUUR0000SA0), rendered by o2h-edge. Built to app.json (`npm run build-bls`, or `npm run watch-bls`).
-// Keyless means 25 queries a day per IP, so nothing is fetched on every page (no layout sources).
+// Keyless by default: 25 queries a day per IP, so nothing is fetched on every page (no layout sources). A visitor may
+// bring their own key (apiKey below): the page keeps it, and the worker adds it to BLS's URLs as `registrationkey`.
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tree, each, choose } from 'assign-gingerly/DX/tree.js';
@@ -91,7 +92,8 @@ const range = tree`
         <label><span>to</span><input name="endyear" type="number" inputmode="numeric" min="1913" max="2099" required value=${'?.endyear'}></label>
         <button type="submit">Show</button>
         <a href="timeseries/data/${'?.id'}">The last three years</a>
-        <small>Without a key, BLS gives up to 10 years at a time.</small>
+        <small class="keyless">Without a key, BLS gives up to 10 years at a time.</small>
+        <small class="keyed">With your key, BLS gives up to 20 years at a time.</small>
     </form>`;
 
 // One series ({ seriesID, data:[{ year, period, periodName, latest, value, footnotes: [{ code, text }] }] }), newest
@@ -135,6 +137,8 @@ const series = {
 /** @type {O2HApp} */
 export const app = {
     api: 'https://api.bls.gov/publicAPI/v2',
+    // A visitor's own key, if they've saved one (see index.html): 500 queries a day, 20 years
+    apiKey: { param: 'registrationkey' },
     routes: [
         // The base: BLS's popular series (mapped, since the API has nothing at its root)
         { pattern: '/', sources: { data: 'timeseries/popular' }, config: popular, title: 'BLS data' },

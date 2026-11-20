@@ -18,7 +18,7 @@ But before doing that, we first need to indicate *how* to display it.  For that,
 | `GET /render?api=<url>&transform=<key>` | Calls the API (through the guards below), and renders its JSON with the transform. The result is `text/html`, with the JSON in `<script type="application/json" data-tree="tree">`. With no transform for the key, or a rendering error, the API's JSON comes back as is, with an `X-O2H-Error` header saying why. |
 | `PUT /o2h-app/<key>` | Installs an app ([navigate-gingerly](https://github.com/bahrus/navigate-gingerly)'s `prepareApp`): routes whose paths mirror an API's, and their transforms. Keyed by the hash of its content (`app-` and 32 hex digits) and checked like transforms, so anyone may install one, but nobody can change one. Capped at `MAX_APP_BYTES`. |
 | `GET /o2h-app/<key>` | The app, exactly as stored. Cacheable for good. |
-| `GET /o2h-app/<key>/<path>` | Matches the path to one of the app's routes, fetches the route's sources in parallel (each through the guards below), and renders the VM `{ route, ...sources }` with the route's transform: an HTML **fragment**, with the VM embedded, as `/render` returns. An aligned route fetches the path itself under the app's API (`/products/3` → `<api>/products/3`). Of the visitor's query string, only the parameters the route lets through (its `query`) are passed on, by the same names. `404` for no app (`no app …`: the page installs it again) or no route; a failing source answers with its status. |
+| `GET /o2h-app/<key>/<path>` | Matches the path to one of the app's routes, fetches the route's sources in parallel (each through the guards below), and renders the VM `{ route, ...sources }` with the route's transform: an HTML **fragment**, with the VM embedded, as `/render` returns. An aligned route fetches the path itself under the app's API (`/products/3` → `<api>/products/3`). Of the visitor's query string, only the parameters the route lets through (its `query`) are passed on, by the same names. If the app declares `apiKey`, a visitor's key in the `X-O2H-Api-Key` header is added, as that parameter, to sources under the app's `api` only, and never stored. `404` for no app (`no app …`: the page installs it again) or no route; a failing source answers with its status. |
 | `GET /` | A one-line description |
 
 **Every response allows any origin** (CORS), since the pages calling the worker live elsewhere. `X-O2H-Error` is exposed to them.
@@ -89,7 +89,7 @@ Serve it like the APOD demo, and open `/demo/store/`. **Deep links** (reloading 
 
 ## Demo: BLS data
 
-The [BLS Public Data API](https://www.bls.gov/developers/) (v2, keyless), as a navigate-gingerly app like the store, in [`demo/bls/`](demo/bls/):
+The [BLS Public Data API](https://www.bls.gov/developers/) (v2, keyless unless the visitor brings a key), as a navigate-gingerly app like the store, in [`demo/bls/`](demo/bls/):
 - **The pages:** popular series, the surveys, a survey (its flags and its popular series), and a series (the latest value, a bar chart, and a table with footnotes).
 - **The chart is rendered by the worker:** the `min` / `max` data pipes give the series' range. CSS scales each bar between them, from custom properties set in `style` attributes. A missing value (`"-"`) is a gap.
 - **Year ranges** use the API's own parameters: the series route has `query: ['startyear', 'endyear']`, so a plain GET form asks for `timeseries/data/X?startyear=2010&endyear=2012`, the same URL as the API's.
@@ -103,6 +103,8 @@ The [BLS Public Data API](https://www.bls.gov/developers/) (v2, keyless), as a n
 - Values are strings; a missing one is `"-"`.
 
 **Without a key, BLS allows 25 queries a day per IP.** The worker's calls count against the machine running it (`npm run dev`), or Cloudflare's shared address once deployed. A page costs one query, and a survey costs two. So nothing is fetched on every page: there are no layout sources.
+
+**A visitor's own key:** the "BLS key" panel under the header keeps one in the browser (`localStorage`), with a Remove button. With a key, BLS allows 500 queries a day (per key, not per IP) and 20 years at a time, and the range form's hint says so. The app declares `apiKey: { param: 'registrationkey' }`, so mirror sends the key to the worker in the `X-O2H-Api-Key` header, and the worker adds `registrationkey=…` only to URLs under the app's `api`. The key never goes in the page's URL, and the worker neither stores it nor sends it back (an upstream error that quoted it would show `…` instead).
 
 Serve it like the store, and open `/demo/bls/`.
 

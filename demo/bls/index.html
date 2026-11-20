@@ -88,6 +88,15 @@
         /* M13: the annual average, among the months */
         tr[data-period="M13"] { background: var(--chip); font-weight: 600; }
 
+        /* The visitor's key: one form or the other, and the range hint that fits */
+        #key-panel { max-width: 1000px; margin: 0 auto; padding: 0 16px 8px; font-size: .85rem; color: var(--muted); }
+        #key-panel summary { cursor: pointer; width: fit-content; }
+        #key-panel form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0 0; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+        #key-panel p { flex-basis: 100%; margin: 0; }
+        #key-panel button { font: inherit; color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+        :root:not([data-api-key]) #key-remove, :root[data-api-key] #key-add { display: none; }
+        :root:not([data-api-key]) .range .keyed, :root[data-api-key] .range .keyless { display: none; }
+
         footer { color: var(--muted); font-size: .8rem; }
         @media (max-width: 640px) {
             th, td { padding: 6px 8px; }
@@ -104,10 +113,24 @@
         </nav>
         <label>Worker <input type="url" id="worker" value="http://localhost:8787"></label>
     </header>
+    <!-- The visitor's own BLS key: kept in this browser (localStorage), sent to the worker in a header, never in a URL -->
+    <details id="key-panel">
+        <summary>BLS key: <span id="key-state">none</span></summary>
+        <form id="key-add">
+            <p>Without a key, BLS allows 25 queries a day per IP and 10 years at a time. With one, 500 a day and 20 years.
+                <a href="https://data.bls.gov/registrationEngine/" target="_blank" rel="noopener">Get a free key</a>.</p>
+            <label>Your key <input name="key" type="password" autocomplete="off" spellcheck="false" required></label>
+            <button type="submit">Save</button>
+        </form>
+        <form id="key-remove">
+            <p>Using your key (<code id="key-tail"></code>), kept in this browser only. The worker passes it to BLS and doesn't store it.</p>
+            <button type="submit">Remove</button>
+        </form>
+    </details>
     <p id="status" aria-live="polite">Loading…</p>
     <main></main>
     <footer>
-        <p>The <a href="https://www.bls.gov/developers/">BLS Public Data API</a> (v2, without a key: 25 queries a day per IP),
+        <p>The <a href="https://www.bls.gov/developers/">BLS Public Data API</a> (v2: without a key, 25 queries a day per IP; with your own, 500),
             rendered as HTML by <strong>o2h-edge</strong>, routed by <strong>navigate-gingerly</strong>. This page's paths are
             the API's paths (<code>surveys/CU</code>, <code>timeseries/data/CUUR0000SA0</code>): each is mirrored to the worker,
             which fetches the route's sources and renders them as one fragment, hydrated here.</p>
@@ -123,12 +146,28 @@
         const workerInput = document.getElementById('worker');
         const escape = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 
+        // The visitor's BLS key, in this browser only. Storage can be unavailable (a private window): then there's no key.
+        const KEY_ITEM = 'bls-registrationkey';
+        const readKey = () => { try { return localStorage.getItem(KEY_ITEM); } catch { return null; } };
+        const writeKey = key => { try { key ? localStorage.setItem(KEY_ITEM, key) : localStorage.removeItem(KEY_ITEM); } catch {} };
+        function showKey() {
+            const key = readKey();
+            const tail = key ? `…${key.slice(-4)}` : '';
+            document.getElementById('key-state').textContent = key ? tail : 'none';
+            document.getElementById('key-tail').textContent = tail;
+            if (key) document.documentElement.dataset.apiKey = '';
+            else delete document.documentElement.dataset.apiKey;
+        }
+        showKey();
+
         const bls = mirror({
             worker: () => workerInput.value,
             app,
             into: document.querySelector('main'),
             renderer: o2hRenderer(),
             transition: true,
+            // Read on each request, so a key saved or removed applies at once
+            apiKey: readKey,
             onRender({ path, by, elapsed, pending, error }) {
                 status.innerHTML = by === 'worker'
                     ? `${escape(path)}, rendered by the worker in ${elapsed} ms${pending ? `, ${pending} parts finished here` : ''}.`
@@ -139,6 +178,23 @@
             },
         });
         workerInput.addEventListener('change', () => bls.refresh());
+
+        // Saving or removing the key shows the page again, fetched with (or without) it
+        document.getElementById('key-add').addEventListener('submit', e => {
+            e.preventDefault();
+            const key = e.target.elements.key.value.trim();
+            if (!key) return;
+            writeKey(key);
+            e.target.reset();
+            showKey();
+            bls.refresh();
+        });
+        document.getElementById('key-remove').addEventListener('submit', e => {
+            e.preventDefault();
+            writeKey(null);
+            showKey();
+            bls.refresh();
+        });
     </script>
 </body>
 </html>
