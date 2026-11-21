@@ -129,3 +129,50 @@ The docs are up to date now. I searched the READMEs, source comments and demos i
 - **navigate-gingerly `mirror.ts`:** the same wording in a comment, fixed, and `mirror.js` rebuilt.
 
 Nothing else describes the install flow. o2h's README only mentions `X-O2H-Error`, which is unchanged.
+
+## Bruce's Response III
+
+In terms of caching, what is the next lowest hanging fruit?  Please explain what advantages / disadvantages it would bring to the table.
+
+## Claude's Response III
+
+### Where the time goes now
+
+I measured against your running servers. A render of the store's home page (`GET /o2h-app/<key>/`) takes **about 330 ms** once warm, and almost all of it is the Fake Store API: `/products` and the layout's `/products/categories` take about 300–500 ms each, fetched in parallel. Rendering is a small part. The API sends **no `Cache-Control`** (only an `ETag`), and our rendered responses don't send one either. So every visit and every navigation, Back and Forward included, makes the worker call the API again.
+
+### My recommendation: let the browser cache rendered paths (opt-in per route)
+
+**The worker adds `Cache-Control: private, max-age=<n>` to a rendered path**, with `n` taken from the route, e.g. `"maxAge": 300` beside its `pattern`. A route without it is unchanged (off by default, as agreed in Initialization).
+
+Why this is the lowest-hanging fruit:
+- **It's tiny:** the worker sets a header. mirror's `fetch` already uses the browser's HTTP cache, so the page needs no change.
+- **App changes can't serve stale pages:** the app's key, the hash of its content, is in the URL. A changed app is a different URL, so only the *data* can be stale, and only for `n` seconds.
+- **It works on `*.workers.dev`** (the sandbox). Cloudflare's edge cache (the Cache API) does nothing there, so the worker-side options below would need a custom domain.
+
+**Advantages**
+- **A repeat within `n` seconds costs nothing:** Back, Forward, revisiting a category, reopening the store. The browser answers right away (about 0 ms instead of about 330 ms). No request reaches the worker, so it uses no rate-limit token and makes no call to the API.
+- **It's the visitor's own cache (`private`)**, so a visitor's API key can't leak into anyone else's page. I'd add `X-O2H-Api-Key` to `Vary`, so changing or removing a key isn't answered from the old entry.
+
+**Disadvantages**
+- **It only helps the same browser.** A first visit, or another visitor, still pays the full 330 ms.
+- **The data can be up to `n` seconds old,** and there's no way to purge a browser's cache. That's why it's opt-in, per route: a product list can take minutes, a cart or stock level none.
+- **Errors must never be cached.** The "app missing" `404` in particular: if a browser kept it, the page would install the app on every visit again. I'd mark every error, and a VM passed back with `X-O2H-Error`, as `no-store`.
+- **`refresh()` would be answered from the cache too.** mirror's `refresh()` could ask with `cache: 'no-cache'` (revalidate) to keep meaning "fetch it again".
+
+### The next step after that: cache the sources in the worker
+
+This is the bigger win, because it helps **every visitor, the first visit included**. It also helps every route that shares a source: the layout's `/products/categories` is fetched for every path. The worker would keep each source's JSON for the route's `maxAge`, keyed by its URL. Its disadvantages are why I'd do it second:
+
+| Where | Advantage | Disadvantage |
+|---|---|---|
+| Cloudflare's Cache API | Free, fast, shared by everyone in a data centre | **Does nothing on `*.workers.dev`**, so it needs a custom domain; each data centre has its own copy |
+| KV | Works anywhere, shared worldwide | The free tier allows only 1,000 writes a day; changes take up to about a minute to reach other locations |
+| Memory (like the apps' cache in `apps.ts`) | Free, works anywhere, simplest | One isolate's memory: lost whenever Cloudflare recycles it, so hits are hard to predict |
+
+**Sources fetched with a visitor's API key must never be shared.** They'd be skipped, or cached under the key, which defeats the purpose. Also, on a custom domain the same `Cache-Control` could add `s-maxage` and let Cloudflare's CDN cache the rendered paths themselves. That's another reason to start with the header.
+
+### Questions for you
+
+1. **Per route `maxAge`** (my preference), an app-wide default, or both (the route wins)?
+2. **For the store demo:** say 300 s on the product list, categories and products?
+3. **`refresh()` revalidates** (`cache: 'no-cache'`): agreed?
