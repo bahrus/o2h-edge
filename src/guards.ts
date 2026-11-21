@@ -8,11 +8,11 @@
  *   forwarded), a timeout, a size cap, and JSON only: anything else is refused, not passed through.
  */
 
-/** A JSON error response (with CORS, like every response). */
-export function errorResponse(status: number, error: string): Response {
+/** A JSON error response (with CORS, like every response), with any further headers. */
+export function errorResponse(status: number, error: string, headers: Record<string, string> = {}): Response {
     return new Response(JSON.stringify({ error }), {
         status,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', ...headers },
     });
 }
 

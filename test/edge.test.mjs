@@ -358,9 +358,12 @@ test('apps: no app, no route, a failing source, and wrong methods', async () => 
     await installApp(key, app);
     const missing = await fetch(`${EDGE}/o2h-app/app-00000000000000000000000000000000/products/1`);
     assert.equal(missing.status, 404);
-    assert.match((await missing.json()).error, /^no app/, 'the page re-installs on this');
+    assert.match((await missing.json()).error, /^no app/);
+    assert.equal(missing.headers.get('X-O2H-Missing'), 'app', 'the page installs the app on this');
+    assert.match(missing.headers.get('Access-Control-Expose-Headers') ?? '', /X-O2H-Missing/);
     const noRoute = await fetch(`${EDGE}/o2h-app/${key}/carts/1`);
     assert.equal(noRoute.status, 404);
+    assert.equal(noRoute.headers.get('X-O2H-Missing'), null, 'a missing route is not a missing app');
     assert.match((await noRoute.json()).error, /no route/);
     const failing = await fetch(`${EDGE}/o2h-app/${key}/products/99`);
     assert.equal(failing.status, 404);

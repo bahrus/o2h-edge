@@ -22,7 +22,7 @@ import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import { errorResponse, guardedFetch, refuseApiUrl, refuseListing } from './guards.js';
 import { getTransform, getTransformJson, listTransforms, putTransform } from './transforms.js';
 import { getAppJson, putApp, renderAppPath } from './apps.js';
-import { API_KEY_HEADER } from 'navigate-gingerly/routes.js';
+import { API_KEY_HEADER, MISSING_HEADER } from 'navigate-gingerly/routes.js';
 
 const APP_PATH = /^\/o2h-app\/([^/]+)(\/.*)?$/;
 
@@ -30,7 +30,8 @@ const CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
     'Access-Control-Allow-Headers': `Content-Type, Authorization, ${API_KEY_HEADER}`,
-    'Access-Control-Expose-Headers': 'X-O2H-Error',
+    // X-O2H-Missing: the page installs an app only when it's told the worker hasn't got it
+    'Access-Control-Expose-Headers': `X-O2H-Error, ${MISSING_HEADER}`,
 };
 
 export default {

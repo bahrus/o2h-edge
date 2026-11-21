@@ -17,7 +17,7 @@
 import { handleO2HRequest, O2H_HEADER } from 'o2h/worker/core.js';
 import type { O2HTransform } from 'o2h/worker/core.js';
 import { appKey, validateApp } from 'navigate-gingerly/app.js';
-import { composeVM, matchRoute, sourcesFor, withApiKey } from 'navigate-gingerly/routes.js';
+import { composeVM, matchRoute, MISSING_HEADER, sourcesFor, withApiKey } from 'navigate-gingerly/routes.js';
 import type { InstalledApp } from 'navigate-gingerly/routes.js';
 import { errorResponse, guardedFetch, refuseApiUrl } from './guards.js';
 
@@ -104,7 +104,8 @@ async function getApp(env: Env, key: string): Promise<InstalledApp<O2HTransform>
  */
 export async function renderAppPath(env: Env, key: string, path: string, requestHost: string, apiKey?: string | null): Promise<Response> {
     const app = await getApp(env, key);
-    if (!app) return errorResponse(404, `no app "${key}"`);
+    // Marked, so the page knows to install the app (rather than a route or source that isn't there)
+    if (!app) return errorResponse(404, `no app "${key}"`, { [MISSING_HEADER]: 'app' });
     const match = matchRoute(app, path);
     if (!match) return errorResponse(404, `no route of the app matches "${path}"`);
     let urls: Record<string, string>;
