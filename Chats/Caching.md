@@ -176,3 +176,65 @@ This is the bigger win, because it helps **every visitor, the first visit includ
 1. **Per route `maxAge`** (my preference), an app-wide default, or both (the route wins)?
 2. **For the store demo:** say 300 s on the product list, categories and products?
 3. **`refresh()` revalidates** (`cache: 'no-cache'`): agreed?
+
+## Bruce's Response IV
+
+> - **A repeat within `n` seconds costs nothing:** Back, Forward, revisiting a category, reopening the store. The browser answers right away (about 0 ms instead of about 330 ms). No request reaches the worker, so it uses no rate-limit token and makes no call to the API.
+
+I'm more interested in improving the UI so that already loaded routes don't get loaded again -- if someone scrolls within a route, expands a section, plays a song from a link in a route, etc, moving away from the route, then coming back doesn't lose all that state.  Is that oable?
+
+
+
+
+## Claude's Response IV
+
+**Yes, it's doable, and it fits mirror well.** The Navigation API already hands mirror every move between routes, Back and Forward included. What it means in practice is that **mirror stops throwing a route's DOM away**.
+
+### How it would work
+
+Today, each navigation does `into.innerHTML = html`, which destroys the previous route's DOM and, with it, everything you listed. Instead:
+
+- **Each rendered route gets its own wrapper** inside `into`, e.g. `<div data-route-path="/products/3">`, holding its fragment.
+- **Moving away hides the wrapper; it isn't removed.** Coming back shows it again. There's no request to the worker, no hydration (its listeners are still attached), and no rendering. Only `finish()` runs (the title, `aria-current`).
+- **A route not kept** is fetched and rendered as now, into a new wrapper.
+
+**How it's hidden matters.** Removing an `<audio>`/`<video>` element from the document **pauses it** (that's in the HTML spec), and `display: none` resets scroll positions inside the route. So I'd hide with **`content-visibility: hidden`** (plus `inert`, so it's skipped by focus, find-in-page and screen readers). It's meant for exactly this: the browser skips rendering the content but keeps its state.
+
+| State | Kept? |
+|---|---|
+| Scroll position inside the route (scrolling panels, carousels) | Yes |
+| The page's own scroll position | Yes, and better than now: the Navigation API restores it on Back/Forward, and the content is there right away instead of arriving after a fetch |
+| Expanded `<details>`, popovers, tabs, anything the hydrated code set | Yes |
+| Form fields typed into but not submitted | Yes |
+| A song playing from a route | **Keeps playing** while you browse other routes |
+| Focus | Restored by the Navigation API's `focusReset` as now (the element focused inside the route isn't refocused) |
+
+### The decisions
+
+1. **What counts as "coming back"?**
+   - **By history entry** (like the browser's own back-forward cache): Back and Forward restore the route as you left it, and clicking a link to it renders it fresh. This is what people expect from Back, and it never surprises anyone with old content after a deliberate click.
+   - **By path:** any return restores it, links included. More is kept, but clicking "Jewelery" again shows the Jewelery page as you left it, possibly scrolled halfway down.
+
+   I'd start **by history entry**, with an option for by path.
+2. **How many to keep.** Kept routes stay in memory, with their images and listeners. I'd keep the **last 10** (an option), dropping the least recently shown, **but never one that's playing media**. Otherwise the song would stop.
+3. **How long the data stays good.** A kept route is never refreshed, however old it gets. An optional `maxAge` could re-render a kept route that's older than that, which loses its state. `refresh()` always re-renders the current route.
+
+### What it costs (disadvantages)
+
+- **Several routes are in the document at once.** That has a few effects:
+  - **Duplicate `id`s:** if two routes render the same id, `getElementById` finds the first, which may be a hidden one. The store's fragments don't use ids, but an app's own code could.
+  - **App code that searches the whole document** (`document.querySelector`) instead of its own route would find hidden routes' elements too. Hydration is already given the container, so the renderers are fine. This is a rule for app authors.
+  - **View transitions:** the store names each product's photo `product-<id>`, in both the grid and the product view. A hidden route's content isn't rendered, so it shouldn't be captured, but I'd test that in all three browsers before relying on it.
+- **Without the Navigation API,** every link loads the shell again, so there's nothing to keep. The browser's own back-forward cache already covers Back there.
+- **Memory**, as above: bounded by the limit.
+- **Stale data**, as above: bounded by `maxAge`, if set.
+
+### Compared with the HTTP caching I proposed
+
+They solve different problems, and you could have both. HTTP caching saves the **request** (about 330 ms), but the page still renders and hydrates again, so **all state is lost**. Keeping the DOM saves the request, the rendering **and** the state, but only for routes already shown on this page load. Keeping the DOM is the better fit for what you describe, so I'd do it first. HTTP caching stays on the list for reopening the store and for links to routes no longer kept.
+
+### Questions for you
+
+1. **By history entry** to start (my preference), or by path?
+2. **Opt-in or on by default?** I'd make it on by default, keeping 10 routes, since mirror's whole job is in-app navigation. `keep: 0` would turn it off.
+3. **The store demo:** anything in particular you'd like it to show off? It has no media today. A quick check would be: scroll the grid, open a product, go Back, and land at the same spot with no request.
